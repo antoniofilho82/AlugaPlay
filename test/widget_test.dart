@@ -1,9 +1,7 @@
-// This is a basic Flutter widget test.
+// Testes de widget das jornadas principais do aplicativo.
 //
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+// WidgetTester permite interagir com a interface e verificar a árvore de widgets.
+// Os testes enviam gestos, localizam widgets e verificam textos e propriedades.
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -172,7 +170,7 @@ void main() {
     expect(Rental.localRequests, isEmpty);
   });
 
-  // Alterna o modo ativo em runtime e confirma que o MaterialApp acompanha o notifier.
+  // Confirma que alternar o tema atualiza o app e permite retornar ao modo anterior.
   testWidgets('user can switch between light and dark themes', (
     WidgetTester tester,
   ) async {
@@ -203,7 +201,7 @@ void main() {
     );
   });
 
-  // O voltar percorre o histórico de abas antes de retornar ao catálogo.
+  // Confirma que Voltar percorre o histórico das abas e depois retorna dos detalhes.
   testWidgets('system back follows tab history and pops product details', (
     WidgetTester tester,
   ) async {

@@ -83,6 +83,7 @@ class _SplashScreenState extends State<SplashScreen>
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
+                            // O emblema mantém as mesmas cores do ícone adaptativo Android.
                             Container(
                               width: 136,
                               height: 136,

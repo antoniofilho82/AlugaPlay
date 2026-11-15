@@ -34,6 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  /// Encerra o teclado, atualiza o perfil demonstrativo e abre a Home.
   void _enterDemoMode() {
     // Fecha o teclado e aproveita o e-mail informado para personalizar o perfil.
     FocusScope.of(context).unfocus();
@@ -43,7 +44,7 @@ class _LoginScreenState extends State<LoginScreen> {
     Navigator.of(context).pushReplacementNamed(AppRoutes.home);
   }
 
-  // Mantém ações ainda fora do protótipo explícitas, sem simular uma operação real.
+  /// Explica que recursos ainda não integrados não executam ações reais.
   void _showPrototypeNotice(String featureName) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()

@@ -42,6 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // A busca e a aba selecionada pertencem ao estado desta tela.
   final TextEditingController _searchController = TextEditingController();
+  // Guarda as abas anteriores para que Voltar percorra a navegação recente.
   final List<int> _tabHistory = [];
   int _selectedTab = 0;
   String _searchQuery = '';
@@ -92,6 +93,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  /// Troca de aba e registra a origem sem repetir a mesma entrada em sequência.
   void _navigateToTab(int index) {
     if (index == _selectedTab) return;
 
@@ -132,6 +134,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     // IndexedStack preserva o estado das abas enquanto o usuário alterna entre elas.
+    // O PopScope consome Voltar para restaurar abas e, por fim, limpar filtros.
     return PopScope(
       canPop:
           _tabHistory.isEmpty &&
@@ -168,6 +171,7 @@ class _HomeScreenState extends State<HomeScreen> {
         bottomNavigationBar: NavigationBar(
           selectedIndex: _selectedTab,
           onDestinationSelected: (index) {
+            // Tocar em Início manualmente encerra o histórico anterior.
             if (index == 0 && index == _selectedTab) {
               setState(_tabHistory.clear);
               return;
@@ -1157,7 +1161,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _signOut() {
-    // Encerra o estado demonstrativo antes de substituir a Home pelo login.
+    // Descarta o histórico e os dados da sessão antes de abrir o login.
     _tabHistory.clear();
     UserProfile.reset();
     Rental.localRequests.clear();

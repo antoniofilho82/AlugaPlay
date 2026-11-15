@@ -1,7 +1,7 @@
 # AlugaPlay — Documentação Técnica de Engenharia de Software
 
 > **Versão documentada:** 15 de novembro de 2026  
-> **Escopo de inspeção:** `pubspec.yaml`, todos os 16 arquivos Dart em `lib/` e `test/widget_test.dart`.  
+> **Escopo documentado:** aplicação Flutter, seis testes de widget e recursos visuais nativos Android.  
 > **Validação executada:** `flutter analyze && flutter test --no-pub`.
 > **Equipe:** Antonio Moura da Costa Filho, Enzo de Melo Cordeiro e Marcus Vinicius Ferreira Lustosa
 
@@ -26,7 +26,8 @@ O app usa conteúdo fictício declarado no código e estado em memória. “Conf
 | Decisão | Aplicação atual | Motivo e consequência |
 |---|---|---|
 | Modularização por responsabilidade | `app/`, `theme/`, `routes/`, `models/`, `data/`, `components/`, `screens/` | Isola configuração, regras, conteúdo e interface; facilita alterações localizadas e trabalho paralelo. |
-| Estado Flutter local | `StatefulWidget`, `setState`, `IndexedStack` | Adequado ao pequeno número de telas e ao protótipo. Não há pacote externo de gerenciamento de estado. |
+| Estado Flutter local | `StatefulWidget`, `setState`, `IndexedStack`, `ValueNotifier<ThemeMode>` | Adequado ao escopo do protótipo: estado de tela local e tema reativo, sem pacote externo de gerenciamento de estado. |
+| Aparência e desempenho da troca de tema | Temas cacheados e `themeAnimationDuration: Duration.zero` | Reutiliza as instâncias de `ThemeData` e elimina a transição animada durante a alternância. |
 | Estado demonstrativo estático | `UserProfile.currentUser`, `Rental.localRequests` | Facilita compartilhar os dados entre telas sem serviço, mas não persiste após encerrar o app e não é uma estratégia de produção para múltiplos usuários. |
 | Rotas nomeadas nativas | `MaterialApp.routes` e `Navigator.pushNamed` | Mantém os caminhos centralizados e transfere o produto selecionado por `RouteSettings.arguments`. |
 | Formatação em Dart puro | `Product.formattedPrice`, `_formatDate`, `_formatCurrency` | Evita dependência de `intl` na Fase 1. A implementação atual cobre valores e datas nos formatos simples usados no protótipo. |
@@ -43,8 +44,7 @@ AlugaPlay/
 ├── assets/
 │   ├── images/
 │   └── icons/
-│       ├── alugaplay_icon.png
-│       └── alugaplay_icon_foreground.png
+│       └── alugaplay_icon.png
 ├── lib/
 │   ├── main.dart
 │   ├── app/
@@ -96,60 +96,53 @@ AlugaPlayApp
                           ├─ Categorias: seleciona filtro e volta à Início
                           ├─ Meus Aluguéis: lista reversa / cancelar
                           └─ Perfil: dados de UserProfile / atalhos / logout
+                               Histórico das abas: _tabHistory + PopScope
 ```
 
 O objeto `Product` é passado como argumento, não reconstruído a partir de identificador. `HomeScreen._openProduct` aguarda o retorno da tela de detalhes e atualiza o estado se ainda estiver montada. `ProductDetailsScreen` repassa a instância recebida à tela de aluguel. Após a confirmação, `popUntil` fecha as telas intermediárias até encontrar a rota da Home ou a primeira rota.
 
+As trocas de aba pela barra, atalhos do Perfil e ações de retorno passam por `_navigateToTab`. A aba anterior é adicionada ao histórico sem duplicatas consecutivas; o botão Voltar consome a última aba visitada antes de retornar ao início ou limpar filtros. Selecionar Início manualmente e encerrar a sessão limpa o histórico.
+
 ## 2. Design System, Tema Global e Identidade Visual no Código
 
-### 2.1 Paleta oficial
+### 2.1 Paletas oficiais
 
-| Cor | Constante em `AppTheme` | Uso semântico observado |
+| Modo | Elemento | Cor |
 |---|---|---|
-| `#101814` | `background` | Fundo de tela e áreas mais profundas dos cartões. |
-| `#1C2922` | `surface` | Cards, painéis, campos e navegação. |
-| `#16A34A` | `action` | Botões principais, seleção e indicadores de ação. |
-| `#4ADE80` | `accent` | Ícones, foco, destaques e preço estimado. |
-| `#F0FDF4` | `textPrimary` | Texto primário e conteúdo de alto contraste. |
+| Claro | Fundo cinza-azulado | `#EEF2F6` |
+| Claro | Superfícies e cards | `#FFFFFF` |
+| Claro | Containers e bordas | `#E2E8F0` / `#CBD5E1` |
+| Claro | Verde primário e profundo | `#16A34A` / `#15803D` |
+| Claro | Texto principal e secundário | `#0F172A` / `#475569` |
+| Escuro | Fundo grafite | `#0F1115` |
+| Escuro | Superfícies e cards | `#181B20` |
+| Escuro | Containers e bordas | `#22262E` / `#2E3440` |
+| Escuro | Verde primário e acento | `#16A34A` / `#22C55E` |
+| Escuro | Texto principal e secundário | `#F8FAFC` / `#94A3B8` |
 
-As telas aplicam variações de transparência com `withValues(alpha: ...)`; essas variações derivam das cores da paleta, não de uma sexta cor-base.
+As telas aplicam variações de transparência com `withValues(alpha: ...)`; elas derivam das cores e semânticas dos dois temas.
 
 ### 2.2 `AppTheme` e `ThemeData`
 
-`lib/theme/app_theme.dart` contém a classe utilitária `AppTheme`, cujo construtor é privado. As cores e os raios (`radiusMedium = 12`, `radiusLarge = 16`) são constantes estáticas. O getter `darkTheme` constrói o tema:
+`lib/theme/app_theme.dart` contém a classe utilitária `AppTheme`, cujo construtor é privado. As cores e os raios (`radiusMedium = 12`, `radiusLarge = 16`) são constantes estáticas. `themeModeNotifier` é um `ValueNotifier<ThemeMode>` iniciado em `ThemeMode.system`; `toggleTheme` alterna explicitamente entre claro e escuro, notificando o app.
 
-1. Cria `ColorScheme.dark` com cores primárias, secundárias, fundo e superfície.
-2. Usa `copyWith` para preencher containers, contornos, cores de superfície, texto secundário e tint.
-3. Cria `ThemeData` com `Brightness.dark`, fundo de `Scaffold`, `canvasColor` e `TextTheme`.
-4. Padroniza botões elevados, contornados e de texto; campos com estados normal, focado e desativado; cards, ícones, chips, divisores, `AppBar`, navegação e `SnackBar`.
+`lightTheme` e `darkTheme` são instâncias `static final`, construídas uma vez por `_buildLightTheme()` e `_buildDarkTheme()` e reutilizadas nas mudanças de aparência. A construção compartilhada cria o `ColorScheme`, configura superfícies, containers, contornos, tipografia e componentes Material (botões, campos, cards, ícones, chips, divisores, `AppBar`, navegação, `SnackBar` e diálogos). O tema claro aplica borda `#CBD5E1` nos cards.
 
-Trecho real representativo:
+`AlugaPlayApp` observa o notifier com `ValueListenableBuilder<ThemeMode>` e entrega o modo atual a `MaterialApp`. `themeAnimationDuration: Duration.zero` faz a troca ocorrer sem animar centenas de estilos nas telas mantidas pelo `IndexedStack`.
+
+Trechos representativos:
 
 ```dart
-static const Color background = Color(0xFF101814);
-static const Color surface = Color(0xFF1C2922);
-static const Color action = Color(0xFF16A34A);
-static const Color accent = Color(0xFF4ADE80);
-static const Color textPrimary = Color(0xFFF0FDF4);
-
-static ThemeData get darkTheme {
-  final colorScheme = ColorScheme.dark(
-    primary: action,
-    onPrimary: textPrimary,
-    secondary: accent,
-    onSecondary: background,
-    surface: surface,
-    onSurface: textPrimary,
-  );
-  return ThemeData(
-    brightness: Brightness.dark,
-    scaffoldBackgroundColor: background,
-    colorScheme: colorScheme,
-  );
-}
+static final ThemeData darkTheme = _buildDarkTheme();
+static final ThemeData lightTheme = _buildLightTheme();
 ```
 
-O trecho foi abreviado para destacar a construção central; no arquivo, o esquema e o tema incluem configurações adicionais para tipografia e componentes descritas acima.
+```dart
+themeMode: mode,
+themeAnimationDuration: Duration.zero,
+```
+
+O fragmento destaca o cache e a aplicação sem animação; as paletas completas estão tabeladas nesta seção.
 
 ### 2.3 Responsividade e contenção de texto
 
@@ -186,9 +179,11 @@ O `const` permite construir a raiz sem estado inicial mutável próprio.
 
 - define o título `AlugaPlay`;
 - desativa a faixa de depuração;
-- configura `AppTheme.darkTheme` e `ThemeMode.dark`;
+- configura os temas cacheados `AppTheme.lightTheme` e `AppTheme.darkTheme`, acompanhados pelo modo atual do notifier;
 - escolhe `AppRoutes.splash` como `initialRoute`;
 - entrega o mapa `AppRoutes.routes`.
+
+O `ValueListenableBuilder<ThemeMode>` reconstrói o `MaterialApp` quando `themeModeNotifier` muda. Os temas claros e escuros são instâncias cacheadas, e `themeAnimationDuration: Duration.zero` aplica a aparência imediatamente.
 
 ### 3.3 `lib/routes/app_routes.dart` — `AppRoutes`
 
@@ -215,6 +210,12 @@ static Map<String, WidgetBuilder> get routes => {
 ```
 
 As rotas não declaram builders com parâmetros de produto. O contexto de rota fornece `RouteSettings.arguments`, validado em cada tela que consome `Product`.
+
+### 3.4 Recursos nativos Android
+
+O `AndroidManifest.xml` exibe o rótulo `AlugaPlay`. O ícone adaptativo referencia o foreground vetorial `drawable/ic_launcher_foreground.xml` e o fundo sólido `drawable/ic_launcher_background.xml` em `#13171D`; não há PNGs de foreground por densidade competindo com o vetor. Os `ic_launcher.png` de densidade permanecem como legado para versões anteriores ao Android 8.
+
+O `LaunchTheme` usa fundo sólido que acompanha o modo claro ou escuro. Para Android 12+, os estilos definem `android:windowSplashScreenAnimatedIcon` como transparente e configuram `android:windowSplashScreenBackground` com o fundo do modo, evitando uma segunda splash com ícone antes da SplashScreen Flutter.
 
 ## 4. Anatomia do Código — Modelos de Domínio, Regras e Catálogo
 
@@ -365,6 +366,8 @@ Não exibe imagem carregada da rede; usa o ícone associado ao produto. O badge 
 
 Em `initState()`, cria-se uma `CurvedAnimation` com `Curves.easeOutCubic`, compartilhada entre fade e escala, e inicia-se o controlador. O callback do temporizador verifica `mounted` antes de usar o `context` para `pushReplacementNamed(AppRoutes.login)`. Em `dispose()`, cancela o temporizador e descarta o controlador.
 
+O emblema Flutter usa o quadrado interno e o controle gamer nas cores do ícone adaptativo Android. No Android 12+, a splash nativa mantém fundo correspondente ao tema e ícone animado transparente, evitando exibir um segundo emblema antes do primeiro frame Flutter.
+
 Árvore do `build`:
 
 ```text
@@ -455,7 +458,13 @@ Scaffold
 
 **Meus Aluguéis:** `_buildRentalsTab()` gera `Rental.localRequests.reversed.toList()`, mostrando o registro mais novo primeiro. Há cabeçalho com contagem e estado vazio com botão para retornar à Home. Cada `_buildRentalCard()` apresenta ícone, nome, status, datas, duração, preço estimado, observações opcionais e botão de cancelamento. `_cancelRental()` remove a instância selecionada com `setState` e exibe `SnackBar`. `_formatDate()` usa `padLeft(2, '0')` para dia e mês; `_formatCurrency()` troca ponto decimal por vírgula.
 
-**Perfil:** `_buildProfileTab()` lê `UserProfile.currentUser` e a contagem de `Rental.localRequests`. Apresenta nome, gamer tag, e-mail, cidade e selo, além de dois resumos e atalhos para as abas. `_profileDetail`, `_buildProfileSummary` e `_buildProfileShortcut` são subárvores auxiliares. `_signOut()` restaura o perfil, limpa a lista de solicitações e substitui a Home por `AppRoutes.login`.
+**Perfil:** `_buildProfileTab()` lê `UserProfile.currentUser` e a contagem de `Rental.localRequests`. Apresenta nome, gamer tag, e-mail, cidade e selo, além de dois resumos e atalhos para as abas. `_profileDetail`, `_buildProfileSummary` e `_buildProfileShortcut` são subárvores auxiliares. `_signOut()` limpa histórico e solicitações, restaura o perfil e substitui a Home por `AppRoutes.login`.
+
+#### Histórico de abas e botão Voltar
+
+`_tabHistory` é uma pilha local de índices. `_navigateToTab(index)` ignora a aba atual, registra a anterior sem repetir entradas consecutivas e atualiza `_selectedTab`. Barra inferior, atalhos do Perfil e ação “Explorar Catálogo” usam o mesmo método; a seleção de categoria também retorna à Home por esse fluxo. A escolha manual da aba Início na barra e o logout limpam a pilha.
+
+`PopScope` permite o pop normal somente quando a Home está na aba Início, sem histórico e sem filtros. Caso contrário, intercepta o botão Voltar: restaura a última aba visitada, retorna ao início se não houver histórico, ou limpa busca e categoria quando a Home já está selecionada. Isso permite voltar de Meus Aluguéis para Categorias e, em seguida, para Início sem fechar a tela.
 
 ### 6.4 `lib/screens/product_details/product_details_screen.dart` — `ProductDetailsScreen`
 
@@ -524,7 +533,7 @@ A alternativa `route.isFirst` evita continuar procurando indefinidamente se a Ho
 
 ## 7. Engenharia dos Testes Automatizados
 
-O arquivo `test/widget_test.dart` contém quatro testes de widget. `setUp` e `tearDown` limpam `Rental.localRequests` e chamam `UserProfile.reset()`, evitando estado compartilhado entre casos.
+O arquivo `test/widget_test.dart` contém seis testes de widget. `setUp` e `tearDown` restauram `ThemeMode.system`, limpam `Rental.localRequests` e chamam `UserProfile.reset()`, evitando estado compartilhado entre casos.
 
 O tempo da splash é avançado com `tester.pump(const Duration(milliseconds: 2600))`, sem aguardar 2,6 segundos reais. Os testes usam `pumpAndSettle()` após navegações e animações.
 
@@ -555,6 +564,14 @@ Define `tester.view.physicalSize = const Size(360, 800)` e `devicePixelRatio = 1
 
 Preenche `lucas@alugaplay.com` na Login, entra, abre Perfil e confere e-mail e nome derivado. Em seguida aciona “Sair da conta” e verifica Login, perfil padrão restaurado e solicitações vazias.
 
+### Cenário 5 — Alternância de tema
+
+Na Home, registra o brilho inicial, alterna o tema por `AppTheme.toggleTheme`, confirma que `MaterialApp` passa ao brilho oposto e verifica o valor de `themeModeNotifier`. Alterna novamente e confirma o retorno ao brilho inicial.
+
+### Cenário 6 — Botão Voltar e histórico de navegação
+
+Entra na Home, navega de Início para Categorias e depois para Meus Aluguéis. Dois eventos de Voltar restauram Categorias e Início, mantendo `HomeScreen` montada. Em seguida abre Detalhes e verifica que o retorno do sistema fecha Detalhes sem remover a Home.
+
 ### Limites da cobertura atual
 
 Não há teste dedicado para unidade semanal, datas iguais ou invertidas, datas com horários diferentes, argumento ausente/inválido, catálogo vazio, observações, estado de erro da imagem, ações de cadastro ou recuperação de senha. O teste compacto cobre busca na Home, não todas as telas nem teclado aberto.
@@ -575,7 +592,10 @@ Não há teste dedicado para unidade semanal, datas iguais ou invertidas, datas 
 | Valores | Tarifas diárias diretas e regra semanal proporcional | Regra semanal existe no código, mas não há produto semanal no catálogo nem teste correspondente. |
 | Responsividade | Flex, ellipsis, rolagem, Wrap e layout responsivo de datas | Teste 360×800 da busca passou; não é validação universal de todas as telas. |
 | Dados | Oito produtos demonstrativos, todos `por dia` | Sem disponibilidade real, API ou catálogo editável. |
-| Assets | Declaração de `assets/images/` e `assets/icons/` no `pubspec.yaml` | A validação desta etapa concentrou-se nos arquivos Dart, no teste e no manifesto; não inspecionou diretórios de recursos Android. |
+| Aparência e desempenho | `ValueNotifier<ThemeMode>`, temas `static final`, `Duration.zero` | Troca reativa e instantânea entre os dois temas sem reconstruir os objetos `ThemeData`. |
+| Navegação de retorno | `_tabHistory`, `_navigateToTab` e `PopScope` em `HomeScreen` | Voltar percorre as abas visitadas e preserva a Home até o último nível. |
+| Recursos nativos Android | Ícone adaptativo vetorial, splash e rótulo `AlugaPlay` | Foreground adaptativo XML nítido; PNGs de foreground conflitantes removidos; splash Android 12+ sem ícone duplicado. |
+| Assets | Declaração de `assets/images/` e `assets/icons/` no `pubspec.yaml` | Ícone Flutter/launcher e recursos Android acompanham a identidade visual final. |
 
 ### 8.2 Melhorias mapeadas
 
@@ -589,20 +609,24 @@ Não há teste dedicado para unidade semanal, datas iguais ou invertidas, datas 
 
 ### 8.3 Saída literal da validação
 
-Comando executado: `flutter analyze && flutter test --no-pub`
+Formatação: `dart format lib/theme/app_theme.dart lib/app/app.dart lib/screens/splash/splash_screen.dart lib/screens/login/login_screen.dart lib/screens/home/home_screen.dart lib/components/product_card.dart test/widget_test.dart`
+
+Validação: `flutter analyze && flutter test --no-pub`
 
 ```text
-Analyzing AlugaPlay...                                          
-No issues found! (ran in 1.3s)
+Analyzing AlugaPlay...
+No issues found! (ran in 2.8s)
 00:00 +0: loading C:/Users/anton/OneDrive/Documentos/Estudos/FACULDADE/Flutter/AlugaPlay/test/widget_test.dart
 00:00 +0: Splash screen navigates to login after its display interval
 00:00 +1: customer can rent a selected catalog product end to end
 00:02 +2: home search filters products on a compact screen without overflow
-00:02 +3: login email appears in profile and sign out returns to login
-00:03 +4: All tests passed!
+00:03 +3: login email appears in profile and sign out returns to login
+00:03 +4: user can switch between light and dark themes
+00:04 +5: system back follows tab history and pops product details
+00:05 +6: All tests passed!
 ```
 
-O resultado comprova análise estática limpa e aprovação dos quatro cenários listados. Não foram executados build Android, testes em dispositivo ou diagnósticos fora do comando solicitado.
+O resultado comprova análise estática limpa e aprovação dos seis cenários listados. Não foram executados build Android ou testes em dispositivo nesta validação.
 
 ### 8.4 Roadmap para evolução
 
@@ -638,7 +662,7 @@ O resultado comprova análise estática limpa e aprovação dos quatro cenários
 |---|---|
 | `lib/main.dart` | Ponto de entrada; função `main()` chama `runApp`. |
 | `lib/app/app.dart` | `AlugaPlayApp`; `MaterialApp`, tema, rota inicial e mapa. |
-| `lib/theme/app_theme.dart` | `AppTheme`; paleta, raios, getter `darkTheme` e configuração Material. |
+| `lib/theme/app_theme.dart` | `AppTheme`; paletas claro/escuro, `ValueNotifier`, temas cacheados e configuração Material. |
 | `lib/routes/app_routes.dart` | `AppRoutes`; cinco constantes e getter `routes`. |
 | `lib/models/product.dart` | `Product`; dados imutáveis e getter `formattedPrice`. |
 | `lib/models/rental.dart` | `Rental`; dados da locação e lista estática `localRequests`. |
@@ -649,14 +673,16 @@ O resultado comprova análise estática limpa e aprovação dos quatro cenários
 | `lib/components/product_card.dart` | `ProductCard`; resumo do produto e callback de detalhes. |
 | `lib/screens/splash/splash_screen.dart` | `SplashScreen` e `_SplashScreenState`; animação, timer e ciclo de vida. |
 | `lib/screens/login/login_screen.dart` | `LoginScreen` e `_LoginScreenState`; campos, modo demonstrativo e avisos. |
-| `lib/screens/home/home_screen.dart` | `HomeScreen` e `_HomeScreenState`; quatro abas, catálogo, perfil e aluguéis. |
+| `lib/screens/home/home_screen.dart` | `HomeScreen` e `_HomeScreenState`; quatro abas, histórico de navegação, catálogo, perfil e aluguéis. |
 | `lib/screens/product_details/product_details_screen.dart` | `ProductDetailsScreen`; leitura de argumento e apresentação de produto. |
 | `lib/screens/rental/rental_screen.dart` | `RentalScreen` e `_RentalScreenState`; datas, cálculo e confirmação local. |
-| `test/widget_test.dart` | Isolamento e quatro jornadas automatizadas de widget. |
+| `test/widget_test.dart` | Isolamento e seis cenários automatizados de widget, incluindo temas e retorno. |
 | `pubspec.yaml` | Nome `alugaplay`, SDK Dart `^3.14.0`, dependências e assets declarados. |
 
-## Equipe de Desenvolvimento
+## Equipe e Divisão de Responsabilidades
 
-- **Antonio Moura da Costa Filho**
-- **Enzo de Melo Cordeiro**
-- **Marcus Vinicius Ferreira Lustosa**
+| Integrante | Responsabilidades |
+|---|---|
+| Antonio Moura da Costa Filho | Tela Inicial / Catálogo (`HomeScreen`) e Tela de Detalhes do Produto (`ProductDetailsScreen`). |
+| Enzo de Melo Cordeiro | Tela de Abertura (`SplashScreen`) e Tela de Acesso (`LoginScreen`). |
+| Marcus Vinicius Ferreira Lustosa | Tela de Solicitação de Aluguel (`RentalScreen`). |

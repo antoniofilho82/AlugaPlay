@@ -4,7 +4,7 @@ import 'package:material_ui/material_ui.dart';
 class AppTheme {
   AppTheme._();
 
-  /// Modo inicial segue a preferência do sistema e pode ser alterado em runtime.
+  /// Notificador reativo observado pelo app para reconstruir o tema em runtime.
   static final ValueNotifier<ThemeMode> themeModeNotifier =
       ValueNotifier<ThemeMode>(ThemeMode.system);
 
@@ -19,17 +19,18 @@ class AppTheme {
   static const double radiusMedium = 12.0;
   static const double radiusLarge = 16.0;
 
-  /// Alterna explicitamente entre claro e escuro conforme o brilho atual.
+  /// Alterna o modo ativo; a mudança notifica os ouvintes de [themeModeNotifier].
   static void toggleTheme(Brightness currentBrightness) {
     themeModeNotifier.value = currentBrightness == Brightness.dark
         ? ThemeMode.light
         : ThemeMode.dark;
   }
 
-  /// Temas cacheados para evitar reconstruções ao alternar a aparência.
+  /// Temas construídos uma vez e reutilizados em cada alternância de aparência.
   static final ThemeData darkTheme = _buildDarkTheme();
   static final ThemeData lightTheme = _buildLightTheme();
 
+  /// Monta o esquema escuro com superfícies grafite e acentos esmeralda.
   static ThemeData _buildDarkTheme() => _buildTheme(
     brightness: Brightness.dark,
     background: const Color(0xFF0F1115),
@@ -40,6 +41,7 @@ class AppTheme {
     foregroundVariant: const Color(0xFF94A3B8),
   );
 
+  /// Monta o esquema claro com fundo frio, superfícies brancas e verde profundo.
   static ThemeData _buildLightTheme() => _buildTheme(
     brightness: Brightness.light,
     background: const Color(0xFFEEF2F6),
