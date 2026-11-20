@@ -1,9 +1,13 @@
 import 'package:material_ui/material_ui.dart';
 
-import '../../models/user_profile.dart';
+import '../../components/alugaplay_logo.dart';
 import '../../routes/app_routes.dart';
+import '../../services/local_auth_service.dart';
+import '../../theme/app_theme.dart';
+import 'forgot_password_screen.dart';
+import 'register_screen.dart';
 
-/// Tela de entrada demonstrativa, sem autenticação ou serviço externo.
+/// Tela de entrada com validação local de credenciais.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -12,138 +16,150 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  Color get _background => Theme.of(context).scaffoldBackgroundColor;
-  Color get _surface => Theme.of(context).colorScheme.surface;
-  Color get _surfaceContainer =>
-      Theme.of(context).colorScheme.surfaceContainerHighest;
-  Color get _primary => Theme.of(context).colorScheme.primary;
-  Color get _accent => Theme.of(context).colorScheme.secondary;
-  Color get _textPrimary => Theme.of(context).colorScheme.onSurface;
-
-  // Os controladores permitem ler os campos e precisam ser descartados no fim.
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  // Alterna a visibilidade sem modificar o conteúdo digitado.
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _emailController;
+  late final TextEditingController _passwordController;
+  bool _rememberAccess = LocalAuthService.rememberAccess;
   bool _obscurePassword = true;
+  String? _errorMessage;
+
+  Color get _textPrimary => Theme.of(context).colorScheme.onSurface;
+  Color get _surface => Theme.of(context).colorScheme.surface;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController = TextEditingController(
+      text: LocalAuthService.rememberedEmail ?? '',
+    );
+    // A senha nunca é recuperada nem pré-preenchida pela sessão lembrada.
+    _passwordController = TextEditingController();
+  }
 
   @override
   void dispose() {
-    // Evita manter os controladores ativos após a saída da tela.
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  /// Encerra o teclado, atualiza o perfil demonstrativo e abre a Home.
-  void _enterDemoMode() {
-    // Fecha o teclado e aproveita o e-mail informado para personalizar o perfil.
-    FocusScope.of(context).unfocus();
-    UserProfile.updateFromLoginEmail(_emailController.text);
-    ScaffoldMessenger.of(context).clearSnackBars();
-    // A troca substitui o login para que o botão voltar não reabra essa tela.
-    Navigator.of(context).pushReplacementNamed(AppRoutes.home);
+  String? _validateEmail(String? value) {
+    final email = value?.trim() ?? '';
+    if (email.isEmpty ||
+        !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+      return 'Informe um e-mail válido.';
+    }
+    return null;
   }
 
-  /// Explica que recursos ainda não integrados não executam ações reais.
-  void _showPrototypeNotice(String featureName) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(
-            '$featureName estará disponível na etapa de integração com Firebase.',
-            style: TextStyle(color: _textPrimary),
-          ),
-          backgroundColor: _surfaceContainer,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+  Future<void> _login() async {
+    FocusScope.of(context).unfocus();
+    if (!_formKey.currentState!.validate()) return;
+
+    final result = await LocalAuthService.login(
+      _emailController.text,
+      _passwordController.text,
+      remember: _rememberAccess,
+    );
+    if (!mounted) return;
+    if (!result.success) {
+      setState(() => _errorMessage = result.message);
+      return;
+    }
+
+    ScaffoldMessenger.of(context).clearSnackBars();
+    await Navigator.of(context).pushReplacementNamed(AppRoutes.home);
+  }
+
+  Future<void> _openForgotPassword() async {
+    final email = await Navigator.of(context).push<String>(
+      MaterialPageRoute<String>(
+        builder: (_) =>
+            ForgotPasswordScreen(initialEmail: _emailController.text),
+      ),
+    );
+    if (!mounted || email == null) return;
+    setState(() {
+      _emailController.text = email;
+      _passwordController.clear();
+      _errorMessage = null;
+    });
+  }
+
+  void _openRegister() {
+    Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => const RegisterScreen()));
   }
 
   @override
   Widget build(BuildContext context) {
-    // A rolagem permite usar o formulário mesmo com teclado ou tela compacta.
+    final colors = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: _background,
+      backgroundColor: _surface,
       body: SafeArea(
         child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: constraints.maxHeight - 48,
-                ),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 420),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // Marca e chamada de entrada apresentam o propósito da tela.
-                        Center(
-                          child: Container(
-                            width: 84,
-                            height: 84,
-                            decoration: BoxDecoration(
-                              color: _surface,
-                              borderRadius: BorderRadius.circular(22),
-                              border: Border.all(
-                                color: _accent.withValues(alpha: 0.35),
-                                width: 1.5,
+          builder: (context, constraints) => SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: constraints.maxHeight - 48,
+              ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(child: const AlugaPlayLogo(size: 84)),
+                      const SizedBox(height: 18),
+                      Center(
+                        child: RichText(
+                          text: TextSpan(
+                            style: TextStyle(
+                              fontSize: 30,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.4,
+                            ),
+                            children: [
+                              TextSpan(
+                                text: 'Aluga',
+                                style: TextStyle(color: _textPrimary),
                               ),
-                            ),
-                            child: Icon(
-                              Icons.sports_esports_rounded,
-                              size: 42,
-                              color: _accent,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        Center(
-                          child: RichText(
-                            text: TextSpan(
-                              style: TextStyle(
-                                fontSize: 30,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.4,
+                              const TextSpan(
+                                text: 'Play',
+                                style: TextStyle(color: AppTheme.emerald),
                               ),
-                              children: [
-                                TextSpan(
-                                  text: 'Aluga',
-                                  style: TextStyle(color: _textPrimary),
-                                ),
-                                TextSpan(
-                                  text: 'Play',
-                                  style: TextStyle(color: _accent),
-                                ),
-                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Bem-vindo! Acesse sua conta para explorar consoles, jogos físicos e pacotes.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          height: 1.4,
+                          color: _textPrimary.withValues(alpha: 0.78),
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          gradient: AppTheme.heroBannerGradient(
+                            Theme.of(context).brightness,
+                          ),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: AppTheme.emeraldAccent.withValues(
+                              alpha: 0.25,
                             ),
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Bem-vindo! Acesse sua conta para explorar consoles, jogos físicos e pacotes.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 14,
-                            height: 1.4,
-                            color: _textPrimary.withValues(alpha: 0.78),
-                          ),
-                        ),
-                        const SizedBox(height: 28),
-                        Container(
-                          // O formulário permanece contido num painel de contraste.
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: _surface,
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(
-                              color: _textPrimary.withValues(alpha: 0.08),
-                            ),
-                          ),
+                        child: Form(
+                          key: _formKey,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
@@ -156,66 +172,47 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                               const SizedBox(height: 18),
-                              TextField(
-                                // Campo de sessão usado para compor o perfil demonstrativo.
+                              TextFormField(
+                                key: const ValueKey('login-email'),
                                 controller: _emailController,
                                 keyboardType: TextInputType.emailAddress,
                                 textInputAction: TextInputAction.next,
-                                style: TextStyle(color: _textPrimary),
-                                decoration: InputDecoration(
+                                autofillHints: const [AutofillHints.username],
+                                validator: _validateEmail,
+                                onChanged: (_) {
+                                  if (_errorMessage != null) {
+                                    setState(() => _errorMessage = null);
+                                  }
+                                },
+                                decoration: const InputDecoration(
                                   labelText: 'E-mail',
                                   hintText: 'jogador@alugaplay.com',
-                                  prefixIcon: Icon(
-                                    Icons.email_outlined,
-                                    color: _accent,
-                                  ),
-                                  filled: true,
-                                  fillColor: _background,
-                                  labelStyle: TextStyle(
-                                    color: _textPrimary.withValues(alpha: 0.75),
-                                  ),
-                                  hintStyle: TextStyle(
-                                    color: _textPrimary.withValues(alpha: 0.4),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide(
-                                      color: _textPrimary.withValues(
-                                        alpha: 0.14,
-                                      ),
-                                    ),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide(
-                                      color: _accent,
-                                      width: 1.5,
-                                    ),
-                                  ),
+                                  prefixIcon: Icon(Icons.email_outlined),
                                 ),
                               ),
-                              const SizedBox(height: 16),
-                              TextField(
-                                // A senha é apenas visual nesta etapa, sem validação remota.
+                              const SizedBox(height: 14),
+                              TextFormField(
+                                key: const ValueKey('login-password'),
                                 controller: _passwordController,
                                 obscureText: _obscurePassword,
                                 textInputAction: TextInputAction.done,
-                                onSubmitted: (_) => _enterDemoMode(),
-                                style: TextStyle(color: _textPrimary),
+                                autofillHints: const [AutofillHints.password],
+                                validator: (value) =>
+                                    value == null || value.isEmpty
+                                    ? 'Informe sua senha.'
+                                    : null,
+                                onFieldSubmitted: (_) => _login(),
                                 decoration: InputDecoration(
                                   labelText: 'Senha',
                                   hintText: '••••••••',
-                                  prefixIcon: Icon(
+                                  prefixIcon: const Icon(
                                     Icons.lock_outline_rounded,
-                                    color: _accent,
                                   ),
                                   suffixIcon: IconButton(
-                                    // O estado controla o ícone e a ocultação do texto.
-                                    onPressed: () {
-                                      setState(() {
-                                        _obscurePassword = !_obscurePassword;
-                                      });
-                                    },
+                                    onPressed: () => setState(
+                                      () =>
+                                          _obscurePassword = !_obscurePassword,
+                                    ),
                                     tooltip: _obscurePassword
                                         ? 'Mostrar senha'
                                         : 'Ocultar senha',
@@ -223,66 +220,105 @@ class _LoginScreenState extends State<LoginScreen> {
                                       _obscurePassword
                                           ? Icons.visibility_off_outlined
                                           : Icons.visibility_outlined,
-                                      color: _accent,
-                                    ),
-                                  ),
-                                  filled: true,
-                                  fillColor: _background,
-                                  labelStyle: TextStyle(
-                                    color: _textPrimary.withValues(alpha: 0.75),
-                                  ),
-                                  hintStyle: TextStyle(
-                                    color: _textPrimary.withValues(alpha: 0.4),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide(
-                                      color: _textPrimary.withValues(
-                                        alpha: 0.14,
-                                      ),
-                                    ),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide(
-                                      color: _accent,
-                                      width: 1.5,
                                     ),
                                   ),
                                 ),
                               ),
                               const SizedBox(height: 6),
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: TextButton(
-                                  onPressed: () => _showPrototypeNotice(
-                                    'Recuperação de senha',
-                                  ),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: _accent,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
+                              LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final rememberOption = Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Checkbox(
+                                        value: _rememberAccess,
+                                        activeColor: AppTheme.emerald,
+                                        onChanged: (value) => setState(
+                                          () =>
+                                              _rememberAccess = value ?? false,
+                                        ),
+                                      ),
+                                      Flexible(
+                                        child: GestureDetector(
+                                          onTap: () => setState(
+                                            () => _rememberAccess =
+                                                !_rememberAccess,
+                                          ),
+                                          child: const Text(
+                                            'Lembrar meu acesso',
+                                            style: TextStyle(
+                                              color: AppTheme.emerald,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                  final forgotPassword = TextButton(
+                                    onPressed: _openForgotPassword,
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: AppTheme.emerald,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                      ),
+                                      minimumSize: Size.zero,
                                     ),
-                                  ),
-                                  child: const Text(
-                                    'Esqueci minha senha',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
+                                    child: const Text(
+                                      'Esqueci minha senha',
+                                      style: TextStyle(fontSize: 12),
                                     ),
+                                  );
+                                  if (constraints.maxWidth < 340) {
+                                    return Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        rememberOption,
+                                        Align(
+                                          alignment: Alignment.centerRight,
+                                          child: forgotPassword,
+                                        ),
+                                      ],
+                                    );
+                                  }
+                                  return Row(
+                                    children: [
+                                      Expanded(child: rememberOption),
+                                      forgotPassword,
+                                    ],
+                                  );
+                                },
+                              ),
+                              if (_errorMessage != null) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  _errorMessage!,
+                                  key: const ValueKey('login-error'),
+                                  style: TextStyle(
+                                    color: colors.error,
+                                    fontSize: 13,
                                   ),
                                 ),
-                              ),
+                              ],
                               const SizedBox(height: 12),
-                              SizedBox(
+                              Container(
                                 height: 50,
+                                decoration: BoxDecoration(
+                                  gradient: AppTheme.primaryGradient,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.3),
+                                  ),
+                                ),
                                 child: ElevatedButton(
-                                  // O acesso demonstrativo encaminha diretamente ao catálogo.
-                                  onPressed: _enterDemoMode,
+                                  onPressed: _login,
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: _primary,
-                                    foregroundColor: _textPrimary,
+                                    backgroundColor: Colors.transparent,
+                                    foregroundColor: Colors.white,
+                                    shadowColor: Colors.transparent,
+                                    elevation: 0,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
                                     ),
@@ -298,7 +334,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               const SizedBox(height: 10),
                               Text(
-                                'Protótipo demonstrativo: toque em Entrar para acessar o catálogo.',
+                                'Acesso local demonstrativo. Seus dados não são enviados a um servidor.',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   fontSize: 12,
@@ -308,42 +344,38 @@ class _LoginScreenState extends State<LoginScreen> {
                             ],
                           ),
                         ),
-                        const SizedBox(height: 20),
-                        Wrap(
-                          // Wrap permite que os textos de cadastro quebrem em telas estreitas.
+                      ),
+                      const SizedBox(height: 12),
+                      Center(
+                        child: Wrap(
                           alignment: WrapAlignment.center,
-                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             Text(
-                              'Ainda não tem conta?',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: _textPrimary.withValues(alpha: 0.75),
-                              ),
+                              'Não tem conta? ',
+                              style: TextStyle(color: colors.onSurfaceVariant),
                             ),
-                            TextButton(
-                              onPressed: () =>
-                                  _showPrototypeNotice('Criação de conta'),
-                              style: TextButton.styleFrom(
-                                foregroundColor: _accent,
-                              ),
-                              child: const Text(
-                                'Criar conta',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
+                            Semantics(
+                              link: true,
+                              child: GestureDetector(
+                                onTap: _openRegister,
+                                child: Text(
+                                  'Criar nova conta',
+                                  style: const TextStyle(
+                                    color: AppTheme.emeraldAccent,
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
                               ),
                             ),
                           ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            );
-          },
+            ),
+          ),
         ),
       ),
     );

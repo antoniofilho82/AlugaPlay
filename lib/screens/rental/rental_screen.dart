@@ -4,7 +4,10 @@ import '../../components/primary_button.dart';
 import '../../data/mock_products.dart';
 import '../../models/product.dart';
 import '../../models/rental.dart';
+import '../../models/user_profile.dart';
 import '../../routes/app_routes.dart';
+import '../../services/local_storage_service.dart';
+import '../../theme/app_theme.dart';
 
 /// Permite escolher datas e registrar uma estimativa local de aluguel.
 class RentalScreen extends StatefulWidget {
@@ -22,52 +25,52 @@ class _RentalScreenState extends State<RentalScreen> {
   Color get _accent => Theme.of(context).colorScheme.secondary;
   Color get _textPrimary => Theme.of(context).colorScheme.onSurface;
 
-  // As datas iniciais já oferecem um exemplo válido de três dias.
   late DateTime _startDate;
   late DateTime _endDate;
-  // Observações ficam no controlador apenas enquanto o formulário está aberto.
+  late String _deliveryMethod;
   final TextEditingController _notesController = TextEditingController();
+  late final TextEditingController _deliveryAddressController;
   String? _dateErrorMessage;
 
   @override
   void initState() {
     super.initState();
-    // Datas sem horário evitam diferenças de duração causadas por horas/minutos.
     final today = _normalizeDate(DateTime.now());
     _startDate = today.add(const Duration(days: 1));
-    _endDate = _startDate.add(const Duration(days: 3));
+    _endDate = _startDate.add(Duration(days: UserProfile.defaultRentalDays));
+    _deliveryMethod = UserProfile.defaultDeliveryMethod;
+    final profile = UserProfile.currentUser;
+    _deliveryAddressController = TextEditingController(
+      text: profile.address.trim().isNotEmpty ? profile.address : profile.city,
+    );
   }
 
   @override
   void dispose() {
-    // Encerra o controlador quando a solicitação é fechada.
     _notesController.dispose();
+    _deliveryAddressController.dispose();
     super.dispose();
   }
 
-  // Constrói uma data à meia-noite para comparar apenas dia, mês e ano.
   static DateTime _normalizeDate(DateTime date) =>
       DateTime(date.year, date.month, date.day);
 
-  // Mantém o formato brasileiro curto usado em cartões e confirmações.
   static String _formatDate(DateTime date) {
     final day = date.day.toString().padLeft(2, '0');
     final month = date.month.toString().padLeft(2, '0');
     return '$day/$month/${date.year}';
   }
 
-  // A estimativa usa vírgula decimal e não representa uma cobrança real.
   static String _formatCurrency(double value) =>
       'R\$ ${value.toStringAsFixed(2).replaceAll('.', ',')}';
 
-  // Recupera o argumento de rota e mantém um fallback para aberturas diretas.
+  // A rota normal recebe o produto; a abertura direta usa o primeiro item local.
   Product? _productFromRoute(BuildContext context) {
     final arguments = ModalRoute.of(context)?.settings.arguments;
     if (arguments is Product) return arguments;
     return mockProducts.isEmpty ? null : mockProducts.first;
   }
 
-  // A diferença entre datas já normalizadas representa dias corridos inteiros.
   int get _totalDays {
     final normalizedStart = _normalizeDate(_startDate);
     final normalizedEnd = _normalizeDate(_endDate);
@@ -75,7 +78,7 @@ class _RentalScreenState extends State<RentalScreen> {
     return diffDays < 1 ? 0 : diffDays;
   }
 
-  // Tarifas semanais são convertidas para uma base diária proporcional.
+  // Produtos semanais são rateados por dia; o catálogo atual só usa diárias.
   double _estimatedTotal(Product product) {
     if (_totalDays < 1) return 0;
     final dailyRate = product.billingUnit.toLowerCase().contains('semana')
@@ -84,7 +87,6 @@ class _RentalScreenState extends State<RentalScreen> {
     return _totalDays * dailyRate;
   }
 
-  // A validação bloqueia datas iguais ou anteriores à retirada.
   void _validateDates() {
     final normalizedStart = _normalizeDate(_startDate);
     final normalizedEnd = _normalizeDate(_endDate);
@@ -97,8 +99,14 @@ class _RentalScreenState extends State<RentalScreen> {
     });
   }
 
+  void _setRentalDuration(int days) {
+    setState(() {
+      _endDate = _startDate.add(Duration(days: days));
+      _dateErrorMessage = null;
+    });
+  }
+
   Future<void> _selectDate({required bool isStartDate}) async {
-    // Limita o calendário ao intervalo de um ano e aplica a paleta no seletor.
     final today = _normalizeDate(DateTime.now());
     final lastDate = today.add(const Duration(days: 365));
     final selectedDate = isStartDate ? _startDate : _endDate;
@@ -125,7 +133,6 @@ class _RentalScreenState extends State<RentalScreen> {
     );
 
     if (pickedDate == null || !mounted) return;
-    // Normaliza também o valor retornado pelo seletor antes de atualizar a tela.
     setState(() {
       if (isStartDate) {
         _startDate = _normalizeDate(pickedDate);
@@ -137,7 +144,7 @@ class _RentalScreenState extends State<RentalScreen> {
   }
 
   Future<void> _confirmRequest(Product product) async {
-    // Impede o registro mesmo se a validação visual ainda não tiver sido acionada.
+    // Revalida antes de persistir, mesmo que a mensagem visual ainda não tenha sido exibida.
     if (_totalDays < 1) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
@@ -159,11 +166,18 @@ class _RentalScreenState extends State<RentalScreen> {
       totalDays: _totalDays,
       estimatedTotal: _estimatedTotal(product),
       notes: _notesController.text.trim(),
+      deliveryMethod: _deliveryMethod,
+      deliveryAddress: _deliveryMethod == 'Entrega Delivery'
+          ? _deliveryAddressController.text.trim()
+          : '',
     );
-    // O protótipo mantém as solicitações somente na memória desta execução.
     Rental.localRequests.add(rental);
+    // Persiste o snapshot para que a aba Meus Aluguéis o restaure após reinício.
+    await LocalStorageService.saveRentals(
+      Rental.localRequests.map((request) => request.toJson()).toList(),
+    );
+    if (!mounted) return;
 
-    // A confirmação deixa claro o caráter local e retorna à Home sem empilhar telas.
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -198,14 +212,17 @@ class _RentalScreenState extends State<RentalScreen> {
                     '${_formatDate(rental.endDate)}',
               ),
               _dialogDetail('Duração', '${rental.totalDays} dia(s)'),
+              _dialogDetail('Modalidade', _deliveryMethod),
+              if (_deliveryMethod == 'Entrega Delivery')
+                _dialogDetail('Endereço', _deliveryAddressController.text),
               _dialogDetail(
                 'Valor estimado',
                 _formatCurrency(rental.estimatedTotal),
               ),
               const SizedBox(height: 10),
               Text(
-                'Os dados ficam armazenados apenas localmente enquanto o app '
-                'estiver em execução. Esta etapa não realiza pagamento real.',
+                'Os dados ficam armazenados localmente neste aparelho. Esta '
+                'etapa não realiza pagamento real.',
                 style: TextStyle(
                   color: _textPrimary.withValues(alpha: 0.72),
                   fontSize: 13,
@@ -236,7 +253,6 @@ class _RentalScreenState extends State<RentalScreen> {
   }
 
   Widget _dialogDetail(String label, String value) {
-    // Reutiliza o mesmo alinhamento para os dados resumidos da confirmação.
     return Padding(
       padding: const EdgeInsets.only(top: 7),
       child: Row(
@@ -266,7 +282,6 @@ class _RentalScreenState extends State<RentalScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // O mesmo argumento selecionado acompanha o usuário até o formulário.
     final product = _productFromRoute(context);
     return Scaffold(
       backgroundColor: _background,
@@ -295,7 +310,6 @@ class _RentalScreenState extends State<RentalScreen> {
   }
 
   Widget _buildForm(Product product) {
-    // A rolagem permite preencher observações e rever os valores com o teclado aberto.
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(18, 8, 18, 24),
       child: Column(
@@ -312,9 +326,49 @@ class _RentalScreenState extends State<RentalScreen> {
             ),
           ),
           const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _durationChip(1, '1 dia'),
+              _durationChip(3, '3 dias (Fim de semana)'),
+              _durationChip(7, '7 dias (Semana)'),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Text(
+            'Modalidade de entrega',
+            style: TextStyle(
+              color: _textPrimary,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            children: [
+              _deliveryChip('Retirada na Loja'),
+              _deliveryChip('Entrega Delivery'),
+            ],
+          ),
+          if (_deliveryMethod == 'Entrega Delivery') ...[
+            const SizedBox(height: 12),
+            TextField(
+              key: const ValueKey('rental-delivery-address'),
+              controller: _deliveryAddressController,
+              textCapitalization: TextCapitalization.words,
+              style: TextStyle(color: _textPrimary),
+              decoration: const InputDecoration(
+                labelText: 'Endereço para entrega',
+                hintText: 'Rua, bairro, cidade/UF e CEP',
+                prefixIcon: Icon(Icons.location_on_outlined),
+              ),
+            ),
+          ],
+          const SizedBox(height: 18),
           LayoutBuilder(
             builder: (context, constraints) {
-              // Em larguras muito estreitas, empilha as datas para evitar overflow.
               final startCard = _buildDateCard(
                 label: 'Data de início',
                 date: _startDate,
@@ -350,6 +404,8 @@ class _RentalScreenState extends State<RentalScreen> {
               ),
             ),
           ],
+          const SizedBox(height: 20),
+          _buildConservationPolicyCard(),
           const SizedBox(height: 24),
           Text(
             'Observações (opcional)',
@@ -367,8 +423,7 @@ class _RentalScreenState extends State<RentalScreen> {
             style: TextStyle(color: _textPrimary),
             decoration: InputDecoration(
               hintText:
-                  'Informe horário preferido, endereço demonstrativo de '
-                  'entrega ou detalhes sobre acessórios.',
+                  'Informe horário preferido ou detalhes sobre acessórios.',
               hintStyle: TextStyle(
                 color: _textPrimary.withValues(alpha: 0.55),
                 height: 1.4,
@@ -395,8 +450,100 @@ class _RentalScreenState extends State<RentalScreen> {
     );
   }
 
+  Widget _durationChip(int days, String label) {
+    final selected = _totalDays == days;
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => _setRentalDuration(days),
+      selectedColor: AppTheme.emeraldAccent.withValues(alpha: 0.22),
+      side: BorderSide(
+        color: selected
+            ? AppTheme.emerald
+            : Theme.of(context).colorScheme.outlineVariant,
+      ),
+      labelStyle: TextStyle(
+        color: selected ? AppTheme.emeraldDeep : _textPrimary,
+        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+      ),
+    );
+  }
+
+  Widget _deliveryChip(String method) {
+    final selected = _deliveryMethod == method;
+    return ChoiceChip(
+      label: Text(method),
+      selected: selected,
+      onSelected: (_) => setState(() {
+        _deliveryMethod = method;
+        if (method == 'Entrega Delivery' &&
+            _deliveryAddressController.text.isEmpty) {
+          final profile = UserProfile.currentUser;
+          _deliveryAddressController.text = profile.address.trim().isNotEmpty
+              ? profile.address
+              : profile.city;
+        }
+      }),
+      selectedColor: AppTheme.emeraldAccent.withValues(alpha: 0.22),
+      side: BorderSide(
+        color: selected
+            ? AppTheme.emerald
+            : Theme.of(context).colorScheme.outlineVariant,
+      ),
+      labelStyle: TextStyle(
+        color: selected ? AppTheme.emeraldDeep : _textPrimary,
+        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+      ),
+    );
+  }
+
+  Widget _buildConservationPolicyCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: AppTheme.heroBannerGradient(Theme.of(context).brightness),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppTheme.emeraldAccent.withValues(alpha: 0.38),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.verified_user_outlined, color: AppTheme.emerald),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Política de Conservação e Caução',
+                  style: TextStyle(
+                    color: _textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'O equipamento é testado antes da locação. Na retirada, '
+                  'conferimos os cabos originais; na devolução, pedimos que '
+                  'o produto retorne sem danos físicos. A caução e as '
+                  'condições são demonstrativas nesta versão.',
+                  style: TextStyle(
+                    color: _textPrimary.withValues(alpha: 0.76),
+                    fontSize: 12,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildProductSummary(Product product) {
-    // Identifica o item e sua tarifa antes de solicitar o período.
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -468,7 +615,6 @@ class _RentalScreenState extends State<RentalScreen> {
     required DateTime date,
     required VoidCallback onTap,
   }) {
-    // Toda a área do cartão abre o seletor de data correspondente.
     return Material(
       color: _surface,
       borderRadius: BorderRadius.circular(14),
@@ -484,11 +630,7 @@ class _RentalScreenState extends State<RentalScreen> {
           ),
           child: Row(
             children: [
-              Icon(
-                Icons.calendar_month_rounded,
-                color: _accent,
-                size: 22,
-              ),
+              Icon(Icons.calendar_month_rounded, color: _accent, size: 22),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -525,7 +667,6 @@ class _RentalScreenState extends State<RentalScreen> {
   }
 
   Widget _buildEstimateCard(Product product) {
-    // Recalcula o resumo com as datas atuais para refletir cada alteração.
     final totalDays = _totalDays;
     final estimatedTotal = _estimatedTotal(product);
     return Container(
@@ -552,6 +693,12 @@ class _RentalScreenState extends State<RentalScreen> {
             '${product.formattedPrice} ${product.billingUnit}',
           ),
           const SizedBox(height: 10),
+          _summaryRow('Modalidade', _deliveryMethod),
+          const SizedBox(height: 10),
+          if (_deliveryMethod == 'Entrega Delivery') ...[
+            _summaryRow('Endereço', _deliveryAddressController.text),
+            const SizedBox(height: 10),
+          ],
           _summaryRow('Período', '$totalDays dia(s)'),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 14),
@@ -596,7 +743,6 @@ class _RentalScreenState extends State<RentalScreen> {
   }
 
   Widget _summaryRow(String label, String value) {
-    // Flex permite que valores extensos ocupem mais de uma linha sem estourar.
     return Row(
       children: [
         Expanded(
@@ -610,10 +756,7 @@ class _RentalScreenState extends State<RentalScreen> {
           child: Text(
             value,
             textAlign: TextAlign.end,
-            style: TextStyle(
-              color: _textPrimary,
-              fontWeight: FontWeight.w600,
-            ),
+            style: TextStyle(color: _textPrimary, fontWeight: FontWeight.w600),
           ),
         ),
       ],
@@ -621,7 +764,6 @@ class _RentalScreenState extends State<RentalScreen> {
   }
 
   Widget _buildMissingProduct(BuildContext context) {
-    // Oferece retorno ao catálogo se a tela não receber um produto válido.
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),

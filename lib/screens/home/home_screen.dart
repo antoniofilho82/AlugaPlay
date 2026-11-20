@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:material_ui/material_ui.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../components/category_item.dart';
 import '../../components/product_card.dart';
@@ -8,11 +11,15 @@ import '../../models/product.dart';
 import '../../models/rental.dart';
 import '../../models/user_profile.dart';
 import '../../routes/app_routes.dart';
+import '../../services/local_auth_service.dart';
+import '../../services/local_storage_service.dart';
 import '../../theme/app_theme.dart';
 
 /// Reúne o catálogo e as áreas de navegação do cliente.
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({super.key, this.profileImagePicker});
+
+  final Future<String?> Function()? profileImagePicker;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -24,7 +31,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Color get _accent => Theme.of(context).colorScheme.secondary;
   Color get _textPrimary => Theme.of(context).colorScheme.onSurface;
 
-  // Os filtros compartilham os mesmos rótulos usados nos cartões de categoria.
   static const List<String> _categories = [
     'Todos',
     'Consoles',
@@ -32,7 +38,6 @@ class _HomeScreenState extends State<HomeScreen> {
     'Pacotes',
   ];
 
-  // Cada categoria tem um ícone correspondente na navegação visual.
   static const Map<String, IconData> _categoryIcons = {
     'Todos': Icons.grid_view_rounded,
     'Consoles': Icons.sports_esports_rounded,
@@ -40,33 +45,97 @@ class _HomeScreenState extends State<HomeScreen> {
     'Pacotes': Icons.card_giftcard_rounded,
   };
 
-  // A busca e a aba selecionada pertencem ao estado desta tela.
   final TextEditingController _searchController = TextEditingController();
-  // Guarda as abas anteriores para que Voltar percorra a navegação recente.
+  // Permite que Voltar percorra as abas visitadas antes de sair da Home.
   final List<int> _tabHistory = [];
   int _selectedTab = 0;
   String _searchQuery = '';
   String _selectedCategory = 'Todos';
+  String _selectedPlatformFilter = 'Todas';
+  String _selectedGameStyleFilter = 'Todos';
+
+  static const Map<String, List<String>> _gameStyleKeywords = {
+    'Ação': ['ação', 'action'],
+    'Aventura': ['aventura', 'adventure'],
+    'RPG': ['rpg', 'role-playing'],
+    'Corrida': ['corrida', 'racing'],
+    'Esportes': ['esporte', 'sports', 'futebol'],
+    'Luta': ['luta', 'fighting'],
+    'Estratégia': ['estratégia', 'strategy'],
+    'Simulação': ['simulação', 'simulation'],
+  };
+
+  // As opções refletem os valores de plataforma presentes no catálogo.
+  List<String> get _availablePlatforms => [
+    'Todas',
+    ...{
+      for (final product in mockProducts)
+        if (product.platform.trim().isNotEmpty) product.platform.trim(),
+    },
+  ];
+
+  // Só oferece estilos para os quais há ao menos um jogo ou pacote compatível.
+  List<String> get _availableGameStyles => [
+    'Todos',
+    for (final style in _gameStyleKeywords.keys)
+      if (mockProducts.any(
+        (product) =>
+            (product.category == 'Jogos' || product.category == 'Pacotes') &&
+            _productMatchesGameStyle(product, style),
+      ))
+        style,
+  ];
+
+  bool get _hasQuickFilters =>
+      _selectedPlatformFilter != 'Todas' || _selectedGameStyleFilter != 'Todos';
+
+  String get _quickFilterSummary => [
+    if (_selectedPlatformFilter != 'Todas') _selectedPlatformFilter,
+    if (_selectedGameStyleFilter != 'Todos') _selectedGameStyleFilter,
+  ].join(' · ');
 
   @override
   void dispose() {
-    // Libera o campo de busca ao sair da Home.
     _searchController.dispose();
     super.dispose();
   }
 
-  // Combina categoria e termo para que um filtro não anule o outro.
+  // Categoria, console, estilo e busca são aplicados em conjunto por produto.
   List<Product> get _filteredProducts {
     final query = _searchQuery.trim().toLowerCase();
     return mockProducts.where((product) {
       final matchesCategory =
           _selectedCategory == 'Todos' || product.category == _selectedCategory;
+      final matchesPlatform =
+          _selectedPlatformFilter == 'Todas' ||
+          product.platform.toLowerCase() ==
+              _selectedPlatformFilter.toLowerCase();
+      final matchesGameStyle =
+          _selectedGameStyleFilter == 'Todos' ||
+          ((product.category == 'Jogos' || product.category == 'Pacotes') &&
+              _productMatchesGameStyle(product, _selectedGameStyleFilter));
       final matchesSearch =
           query.isEmpty ||
           product.name.toLowerCase().contains(query) ||
           product.platform.toLowerCase().contains(query);
-      return matchesCategory && matchesSearch;
+      return matchesCategory &&
+          matchesPlatform &&
+          matchesGameStyle &&
+          matchesSearch;
     }).toList();
+  }
+
+  // Classifica o texto descritivo; gênero não é um campo explícito do catálogo.
+  static bool _productMatchesGameStyle(Product product, String style) {
+    final keywords = _gameStyleKeywords[style];
+    if (keywords == null) return false;
+    final searchableText = [
+      product.name,
+      product.shortDescription,
+      product.fullDescription,
+      ...product.specs,
+    ].join(' ').toLowerCase();
+    return keywords.any(searchableText.contains);
   }
 
   // Localiza o item destacado sem assumir que sempre haverá um cadastrado.
@@ -105,16 +174,157 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // Limpa tanto o texto visível quanto os valores usados no filtro.
   void _clearFilters() {
     setState(() {
       _selectedCategory = 'Todos';
       _searchQuery = '';
+      _selectedPlatformFilter = 'Todas';
+      _selectedGameStyleFilter = 'Todos';
       _searchController.clear();
     });
   }
 
-  // Informa que a notificação é apenas uma demonstração nesta versão.
+  Future<void> _openQuickFilters() async {
+    // As escolhas do modal só afetam o catálogo quando o usuário aplica o par.
+    var selectedPlatform = _selectedPlatformFilter;
+    var selectedStyle = _selectedGameStyleFilter;
+    final result = await showModalBottomSheet<(String, String)>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      backgroundColor: const Color(0xFF101A14),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) => SizedBox(
+          height: MediaQuery.sizeOf(sheetContext).height * 0.72,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Filtros rápidos',
+                  style: Theme.of(sheetContext).textTheme.titleLarge?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildQuickFilterSection(
+                          title: 'Console / Plataforma',
+                          options: _availablePlatforms,
+                          selected: selectedPlatform,
+                          keyPrefix: 'quick-platform',
+                          onSelected: (value) =>
+                              setSheetState(() => selectedPlatform = value),
+                        ),
+                        const SizedBox(height: 20),
+                        _buildQuickFilterSection(
+                          title: 'Estilo / Tipo de jogo',
+                          options: _availableGameStyles,
+                          selected: selectedStyle,
+                          keyPrefix: 'quick-style',
+                          onSelected: (value) =>
+                              setSheetState(() => selectedStyle = value),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: () => setSheetState(() {
+                        selectedPlatform = 'Todas';
+                        selectedStyle = 'Todos';
+                      }),
+                      child: const Text('Limpar'),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () =>
+                            Navigator.of(sheetContext)
+                                .pop((selectedPlatform, selectedStyle)),
+                        child: const Text('Aplicar filtro'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      _selectedPlatformFilter = result.$1;
+      _selectedGameStyleFilter = result.$2;
+    });
+  }
+
+  Widget _buildQuickFilterSection({
+    required String title,
+    required List<String> options,
+    required String selected,
+    required String keyPrefix,
+    required ValueChanged<String> onSelected,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final option in options)
+              ChoiceChip(
+                key: ValueKey('$keyPrefix-$option'),
+                label: Text(option),
+                selected: selected == option,
+                backgroundColor: const Color(0xFF14241B),
+                selectedColor: const Color(0xFF16A34A),
+                side: BorderSide(
+                  color: selected == option
+                      ? const Color(0xFF22C55E)
+                      : const Color(0xFF2C4A39),
+                ),
+                labelStyle: TextStyle(
+                  color: selected == option
+                      ? Colors.white
+                      : const Color(0xFFECF5EF),
+                  fontWeight: selected == option
+                      ? FontWeight.w600
+                      : FontWeight.w500,
+                ),
+                checkmarkColor: Colors.white,
+                onSelected: (_) => onSelected(option),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
   void _showNotificationNotice() {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -127,20 +337,33 @@ class _HomeScreenState extends State<HomeScreen> {
       );
   }
 
-  void _toggleTheme() {
+  Future<void> _toggleTheme() async {
     AppTheme.toggleTheme(Theme.of(context).brightness);
+    await LocalAuthService.persistPreferences();
+  }
+
+  Future<void> _setThemeMode(ThemeMode mode) async {
+    AppTheme.themeModeNotifier.value = mode;
+    await LocalAuthService.persistPreferences();
+  }
+
+  Future<void> _setNotificationsEnabled(bool enabled) async {
+    UserProfile.notifyReturnReminder = enabled;
+    UserProfile.notifyNewReleases = enabled;
+    setState(() {});
+    await LocalAuthService.persistPreferences();
   }
 
   @override
   Widget build(BuildContext context) {
-    // IndexedStack preserva o estado das abas enquanto o usuário alterna entre elas.
-    // O PopScope consome Voltar para restaurar abas e, por fim, limpar filtros.
+    // Preserva o estado das abas e usa Voltar para percorrer histórico e filtros.
     return PopScope(
       canPop:
           _tabHistory.isEmpty &&
           _selectedTab == 0 &&
           _searchQuery.isEmpty &&
-          _selectedCategory == 'Todos',
+          _selectedCategory == 'Todos' &&
+          !_hasQuickFilters,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
         if (_tabHistory.isNotEmpty) {
@@ -148,17 +371,14 @@ class _HomeScreenState extends State<HomeScreen> {
           setState(() => _selectedTab = previousTab);
         } else if (_selectedTab != 0) {
           setState(() => _selectedTab = 0);
-        } else if (_searchQuery.isNotEmpty || _selectedCategory != 'Todos') {
-          setState(() {
-            _selectedCategory = 'Todos';
-            _searchQuery = '';
-            _searchController.clear();
-          });
+        } else if (_searchQuery.isNotEmpty ||
+            _selectedCategory != 'Todos' ||
+            _hasQuickFilters) {
+          _clearFilters();
         }
       },
       child: Scaffold(
         backgroundColor: _background,
-        // --- Seção: Conteúdo das Abas ---
         body: IndexedStack(
           index: _selectedTab,
           children: [
@@ -168,72 +388,111 @@ class _HomeScreenState extends State<HomeScreen> {
             _buildProfileTab(),
           ],
         ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _selectedTab,
-          onDestinationSelected: (index) {
-            // Tocar em Início manualmente encerra o histórico anterior.
-            if (index == 0 && index == _selectedTab) {
-              setState(_tabHistory.clear);
-              return;
-            }
-            _navigateToTab(index);
-            if (index == 0) {
-              setState(_tabHistory.clear);
-            }
-          },
-          backgroundColor: _surface,
-          indicatorColor: Theme.of(context).colorScheme.primaryContainer,
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home_rounded),
-              label: 'Início',
+        bottomNavigationBar: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Color.alphaBlend(
+                  AppTheme.emeraldAccent.withValues(alpha: 0.07),
+                  _surface,
+                ),
+                _surface,
+              ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
             ),
-            NavigationDestination(
-              icon: Icon(Icons.category_outlined),
-              selectedIcon: Icon(Icons.category_rounded),
-              label: 'Categorias',
+            border: Border(
+              top: BorderSide(
+                color: AppTheme.emeraldAccent.withValues(alpha: 0.18),
+              ),
             ),
-            NavigationDestination(
-              icon: Icon(Icons.receipt_long_outlined),
-              selectedIcon: Icon(Icons.receipt_long_rounded),
-              label: 'Meus aluguéis',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.person_outline_rounded),
-              selectedIcon: Icon(Icons.person_rounded),
-              label: 'Perfil',
-            ),
-          ],
+          ),
+          child: NavigationBar(
+            selectedIndex: _selectedTab,
+            onDestinationSelected: (index) {
+              if (index == 0 && index == _selectedTab) {
+                setState(_tabHistory.clear);
+                return;
+              }
+              _navigateToTab(index);
+              if (index == 0) {
+                setState(_tabHistory.clear);
+              }
+            },
+            backgroundColor: Colors.transparent,
+            indicatorColor: Theme.of(context).colorScheme.primaryContainer,
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.home_outlined),
+                selectedIcon: Icon(Icons.home_rounded),
+                label: 'Início',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.category_outlined),
+                selectedIcon: Icon(Icons.category_rounded),
+                label: 'Categorias',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.receipt_long_outlined),
+                selectedIcon: Icon(Icons.receipt_long_rounded),
+                label: 'Meus aluguéis',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.person_outline_rounded),
+                selectedIcon: Icon(Icons.person_rounded),
+                label: 'Perfil',
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildHomeTab() {
-    // O destaque e a faixa de pacotes não competem com os resultados da busca.
     final products = _filteredProducts;
     final featured = _featuredProduct;
     final showFeatured =
         _searchQuery.trim().isEmpty &&
         _selectedCategory == 'Todos' &&
+        !_hasQuickFilters &&
         featured != null;
-    final showPackages =
-        _searchQuery.trim().isEmpty &&
-        (_selectedCategory == 'Todos' || _selectedCategory == 'Pacotes');
-    final packages = mockProducts
+    final packages = products
         .where((product) => product.category == 'Pacotes')
         .toList();
+    final showPackages =
+        _searchQuery.trim().isEmpty &&
+        (_selectedCategory == 'Todos' || _selectedCategory == 'Pacotes') &&
+        packages.isNotEmpty;
 
     return SafeArea(
       child: CustomScrollView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         slivers: [
-          // --- Seção: Busca e Categorias ---
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
-              child: _buildHeader(),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned(
+                    top: -18,
+                    left: -20,
+                    right: -20,
+                    child: SizedBox(
+                      height: 180,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: AppTheme.topAmbientGradient(
+                            Theme.of(context).brightness,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  _buildHeader(),
+                ],
+              ),
             ),
           ),
           SliverToBoxAdapter(
@@ -249,7 +508,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           if (showFeatured)
-            // --- Seção: Destaque e Pacotes ---
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 26, 20, 0),
@@ -258,7 +516,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           if (showPackages)
             SliverToBoxAdapter(
-              // --- Seção: Catálogo Filtrado ---
               child: Padding(
                 padding: const EdgeInsets.only(top: 28),
                 child: _buildPackagesSection(packages),
@@ -312,7 +569,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildHeader() {
-    // A área expansível protege o título quando a largura disponível é pequena.
     return Row(
       children: [
         Expanded(
@@ -392,7 +648,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildSearchField() {
-    // Atualiza os resultados conforme o texto muda e oferece limpeza imediata.
     return TextField(
       controller: _searchController,
       onChanged: (value) => setState(() => _searchQuery = value),
@@ -431,18 +686,79 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildCategoryStrip() {
-    // A rolagem horizontal mantém todas as categorias acessíveis em telas estreitas.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Text(
-            'Categorias',
-            style: Theme.of(context).textTheme.titleMedium
-                ?.copyWith(color: _textPrimary, fontWeight: FontWeight.w700),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Categorias',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: _textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              IconButton(
+                key: const ValueKey('quick-filter-button'),
+                onPressed: _openQuickFilters,
+                tooltip: 'Filtros rápidos',
+                style: IconButton.styleFrom(
+                  foregroundColor: _hasQuickFilters ? Colors.white : _accent,
+                  backgroundColor: _hasQuickFilters
+                      ? AppTheme.emerald
+                      : Colors.transparent,
+                ),
+                icon: const Icon(Icons.filter_alt_rounded),
+              ),
+            ],
           ),
         ),
+        if (_hasQuickFilters)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 2, 12, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 11,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppTheme.emerald.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: AppTheme.emeraldAccent.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Text(
+                      _quickFilterSummary,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppTheme.emeraldAccent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: _clearFilters,
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppTheme.emeraldAccent,
+                    minimumSize: Size.zero,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  child: const Text('Limpar filtros'),
+                ),
+              ],
+            ),
+          ),
         const SizedBox(height: 12),
         SizedBox(
           height: 44,
@@ -467,13 +783,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildFeaturedCard(Product product) {
-    // O destaque usa a mesma ação do catálogo para repassar o produto selecionado.
+    final brightness = Theme.of(context).brightness;
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: _surface,
+        gradient: AppTheme.heroBannerGradient(brightness),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _accent.withValues(alpha: 0.24)),
+        border: Border.all(
+          color: AppTheme.emeraldAccent.withValues(alpha: 0.55),
+          width: 1.2,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -633,13 +952,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildRentalsTab() {
-    // A lista aparece do registro mais recente para o mais antigo.
     final requests = Rental.localRequests.reversed.toList();
 
     return SafeArea(
       child: CustomScrollView(
         slivers: [
-          // --- Seção: Cabeçalho e Contagem ---
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 24, 20, 18),
@@ -698,7 +1015,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildEmptyRentalsState() {
-    // O estado vazio orienta o retorno à vitrine sem criar uma nova rota.
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -748,7 +1064,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildRentalCard(Rental rental) {
-    // O cartão reúne período, duração, estimativa e observações da solicitação.
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -877,11 +1192,14 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _cancelRental(Rental rental) {
-    // Remove somente o registro escolhido e confirma a ação ao usuário.
+  Future<void> _cancelRental(Rental rental) async {
     setState(() {
       Rental.localRequests.remove(rental);
     });
+    await LocalStorageService.saveRentals(
+      Rental.localRequests.map((request) => request.toJson()).toList(),
+    );
+    if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -902,9 +1220,68 @@ class _HomeScreenState extends State<HomeScreen> {
   static String _formatCurrency(double value) =>
       'R\$ ${value.toStringAsFixed(2).replaceAll('.', ',')}';
 
+  Widget _profileAvatar(
+    UserProfile profile,
+    String initial, {
+    double size = 54,
+  }) {
+    final imagePath = profile.normalizedProfileImagePath;
+    return Container(
+      width: size + 4,
+      height: size + 4,
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: AppTheme.primaryGradient,
+      ),
+      child: ClipOval(
+        child: imagePath == null
+            ? _buildProfileInitial(initial, size)
+            : Image.file(
+                File(imagePath),
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) =>
+                    _buildProfileInitial(initial, size),
+              ),
+      ),
+    );
+  }
+
+  Widget _buildProfileInitial(String initial, double size) {
+    // Mantém a inicial visível sobre o degradê quando não há foto utilizável.
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: [AppTheme.emeraldAccent, AppTheme.emerald],
+        ),
+      ),
+      child: Text(
+        initial,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 24,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
   Widget _buildProfileTab() {
-    // Os dados refletem o perfil e as solicitações mantidos em memória na sessão.
     final profile = UserProfile.currentUser;
+    final initial = profile.displayName.trim().isEmpty
+        ? 'J'
+        : profile.displayName.trim().substring(0, 1).toUpperCase();
+    final addressSummary = profile.address.trim().isNotEmpty
+        ? profile.address
+        : profile.city.trim().isNotEmpty
+        ? profile.city
+        : 'Adicionar endereço para delivery';
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -912,134 +1289,157 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Meu Perfil',
-              style: Theme.of(context).textTheme.headlineMedium
-                  ?.copyWith(color: _textPrimary, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 18),
             Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
               decoration: BoxDecoration(
-                color: _surface,
+                gradient: AppTheme.heroBannerGradient(
+                  Theme.of(context).brightness,
+                ),
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: _textPrimary.withValues(alpha: 0.1)),
+                border: Border.all(
+                  color: AppTheme.emeraldAccent.withValues(alpha: 0.28),
+                ),
               ),
-              child: Column(
+              child: Row(
                 children: [
-                  // --- Seção: Identidade do Jogador ---
-                  Container(
-                    width: 82,
-                    height: 82,
-                    decoration: BoxDecoration(
-                      color: _background,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: _accent.withValues(alpha: 0.3)),
-                    ),
-                    child: Icon(
-                      Icons.sports_esports_rounded,
-                      color: _accent,
-                      size: 40,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    profile.displayName,
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: _textPrimary,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    profile.gamerTag,
-                    style: TextStyle(
-                      color: _accent,
-                      fontWeight: FontWeight.w600,
+                  _profileAvatar(profile, initial),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          profile.displayName,
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: _textPrimary,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          profile.email,
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: _textPrimary.withValues(alpha: 0.65),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  _profileDetail(Icons.email_outlined, profile.email),
-                  const SizedBox(height: 9),
-                  _profileDetail(Icons.location_on_outlined, profile.city),
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _background,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      profile.accountBadge,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: _accent,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                  TextButton(
+                    onPressed: _editPlayerDetails,
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppTheme.emerald,
+                      minimumSize: Size.zero,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
                       ),
                     ),
+                    child: const Text('Editar'),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 16),
-            // --- Seção: Resumo e Atalhos ---
-            Row(
-              children: [
-                Expanded(
-                  child: _buildProfileSummary(
-                    value: '${Rental.localRequests.length}',
-                    label: 'Solicitações ativas',
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildProfileSummary(
-                    value: 'Demo',
-                    label: 'Modo Protótipo',
-                  ),
-                ),
-              ],
+            const SizedBox(height: 24),
+            _profileSectionTitle('Preferências'),
+            _buildSettingsAction(
+              icon: Icons.dark_mode_outlined,
+              label: 'Modo escuro',
+              subtitle: 'Alternar tema escuro',
+              onTap: () => _setThemeMode(
+                Theme.of(context).brightness == Brightness.dark
+                    ? ThemeMode.light
+                    : ThemeMode.dark,
+              ),
+              trailing: Switch(
+                key: const ValueKey('profile-dark-mode'),
+                value: Theme.of(context).brightness == Brightness.dark,
+                activeThumbColor: AppTheme.emerald,
+                onChanged: (value) =>
+                    _setThemeMode(value ? ThemeMode.dark : ThemeMode.light),
+              ),
             ),
-            const SizedBox(height: 22),
-            Text(
-              'Atalhos',
-              style: Theme.of(context).textTheme.titleLarge
-                  ?.copyWith(color: _textPrimary, fontWeight: FontWeight.w700),
+            _buildSettingsAction(
+              icon: Icons.notifications_none_rounded,
+              label: 'Notificações',
+              subtitle: 'Alertas de devolução e novidades',
+              onTap: () => _setNotificationsEnabled(
+                !(UserProfile.notifyReturnReminder &&
+                    UserProfile.notifyNewReleases),
+              ),
+              trailing: Switch(
+                key: const ValueKey('profile-notifications'),
+                value:
+                    UserProfile.notifyReturnReminder &&
+                    UserProfile.notifyNewReleases,
+                activeThumbColor: AppTheme.emerald,
+                onChanged: _setNotificationsEnabled,
+              ),
             ),
-            const SizedBox(height: 10),
-            _buildProfileShortcut(
+            const SizedBox(height: 20),
+            _profileSectionTitle('Locação'),
+            _buildSettingsAction(
+              icon: Icons.local_shipping_outlined,
+              label: 'Modalidade padrão',
+              subtitle: UserProfile.defaultDeliveryMethod,
+              onTap: _selectDeliveryMethod,
+            ),
+            _buildSettingsAction(
+              icon: Icons.calendar_month_outlined,
+              label: 'Duração padrão',
+              subtitle: UserProfile.defaultRentalDays == 1
+                  ? '1 dia'
+                  : '${UserProfile.defaultRentalDays} dias',
+              onTap: _selectRentalDuration,
+            ),
+            _buildSettingsAction(
+              icon: Icons.sports_esports_outlined,
+              label: 'Plataforma favorita',
+              subtitle: UserProfile.favoritePlatform,
+              onTap: _selectFavoritePlatform,
+            ),
+            _buildSettingsAction(
+              icon: Icons.location_on_outlined,
+              label: 'Endereço de entrega',
+              subtitle: addressSummary,
+              onTap: _editDeliveryAddress,
+            ),
+            const SizedBox(height: 20),
+            _profileSectionTitle('Conta e Suporte'),
+            _buildSettingsAction(
               icon: Icons.receipt_long_outlined,
               label: 'Minhas solicitações de aluguel',
+              subtitle:
+                  '${Rental.localRequests.length} solicitações demonstrativas',
               onTap: () => _navigateToTab(2),
             ),
-            const SizedBox(height: 10),
-            _buildProfileShortcut(
-              icon: Icons.explore_outlined,
-              label: 'Explorar catálogo gamer',
-              onTap: () => _navigateToTab(0),
+            _buildSettingsAction(
+              icon: Icons.description_outlined,
+              label: 'Termos de locação e caução',
+              subtitle: 'Conservação, devolução e condições',
+              onTap: _showRentalTerms,
             ),
-            const SizedBox(height: 22),
-            SwitchListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-              secondary: Icon(
-                Theme.of(context).brightness == Brightness.dark
-                    ? Icons.dark_mode_outlined
-                    : Icons.light_mode_outlined,
-              ),
-              title: const Text('Modo escuro'),
-              value: Theme.of(context).brightness == Brightness.dark,
-              activeTrackColor: Theme.of(context).colorScheme.primary,
-              onChanged: (_) => _toggleTheme(),
+            _buildSettingsAction(
+              icon: Icons.delete_sweep_outlined,
+              label: 'Limpar histórico de pedidos',
+              subtitle: 'Remover solicitações desta sessão',
+              onTap: _confirmClearRentalHistory,
             ),
-            const SizedBox(height: 12),
+            _buildSettingsAction(
+              icon: Icons.info_outline_rounded,
+              label: 'Sobre o AlugaPlay',
+              subtitle: 'Versão 1.0.0 • Equipe de desenvolvimento',
+              onTap: _showAbout,
+            ),
+            const SizedBox(height: 14),
             OutlinedButton.icon(
               onPressed: _signOut,
               icon: const Icon(Icons.logout_rounded),
@@ -1059,100 +1459,71 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _profileDetail(IconData icon, String value) {
-    // Expanded e reticências protegem e-mail e localização de textos extensos.
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(icon, color: _accent, size: 18),
-        const SizedBox(width: 9),
-        Flexible(
-          child: Text(
-            value,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: _textPrimary.withValues(alpha: 0.78),
-              fontSize: 13,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildProfileSummary({required String value, required String label}) {
-    // Os dois resumos dividem a largura disponível sem impor tamanho fixo.
-    return Container(
-      constraints: const BoxConstraints(minHeight: 86),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-      decoration: BoxDecoration(
-        color: _surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _textPrimary.withValues(alpha: 0.08)),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: _accent,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: _textPrimary.withValues(alpha: 0.72),
-              fontSize: 11,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProfileShortcut({
+  Widget _buildSettingsAction({
     required IconData icon,
     required String label,
-    required VoidCallback onTap,
+    required String subtitle,
+    VoidCallback? onTap,
+    Widget? trailing,
   }) {
-    // Atalhos trocam a aba atual, mantendo a navegação no mesmo fluxo.
     return Material(
       color: _surface,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 16),
+          constraints: const BoxConstraints(minHeight: 72),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          margin: const EdgeInsets.only(bottom: 9),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _textPrimary.withValues(alpha: 0.08)),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppTheme.emeraldAccent.withValues(alpha: 0.16),
+            ),
           ),
           child: Row(
             children: [
-              Icon(icon, color: _accent, size: 21),
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppTheme.emeraldAccent.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: _accent, size: 20),
+              ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color: _textPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _textPrimary.withValues(alpha: 0.62),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              Icon(Icons.chevron_right_rounded, color: _accent),
+              const SizedBox(width: 8),
+              trailing ??
+                  Icon(Icons.chevron_right_rounded, color: _accent, size: 20),
             ],
           ),
         ),
@@ -1160,16 +1531,478 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _signOut() {
-    // Descarta o histórico e os dados da sessão antes de abrir o login.
+  Widget _buildAboutCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _surface.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _accent.withValues(alpha: 0.16)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Sobre o AlugaPlay',
+            style: TextStyle(color: _textPrimary, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Versão 1.0.0 • Flutter / Dart\n'
+            'Equipe: Antonio Moura da Costa Filho, Enzo de Melo Cordeiro '
+            'e Marcus Vinicius Ferreira Lustosa',
+            style: TextStyle(
+              color: _textPrimary.withValues(alpha: 0.72),
+              fontSize: 12,
+              height: 1.45,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _profileSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Text(
+        title,
+        style: Theme.of(context).textTheme.titleMedium
+            ?.copyWith(color: _textPrimary, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+
+  Future<String?> _chooseSetting({
+    required String title,
+    required List<String> options,
+    required String selected,
+  }) {
+    return showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: _surface,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+                child: Text(
+                  title,
+                  style: Theme.of(sheetContext).textTheme.titleLarge,
+                ),
+              ),
+              for (final option in options)
+                ListTile(
+                  title: Text(option),
+                  trailing: selected == option
+                      ? const Icon(Icons.check_rounded, color: AppTheme.emerald)
+                      : null,
+                  onTap: () => Navigator.pop(sheetContext, option),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _selectDeliveryMethod() async {
+    final value = await _chooseSetting(
+      title: 'Modalidade padrão',
+      options: const ['Retirada na Loja', 'Entrega Delivery'],
+      selected: UserProfile.defaultDeliveryMethod,
+    );
+    if (value == null || !mounted) return;
+    setState(() => UserProfile.defaultDeliveryMethod = value);
+    await LocalAuthService.persistPreferences();
+  }
+
+  Future<void> _selectRentalDuration() async {
+    final current = UserProfile.defaultRentalDays;
+    final value = await _chooseSetting(
+      title: 'Duração padrão',
+      options: const ['1 dia', '3 dias', '7 dias'],
+      selected: current == 1 ? '1 dia' : '$current dias',
+    );
+    if (value == null || !mounted) return;
+    setState(() {
+      UserProfile.defaultRentalDays = switch (value) {
+        '1 dia' => 1,
+        '7 dias' => 7,
+        _ => 3,
+      };
+    });
+    await LocalAuthService.persistPreferences();
+  }
+
+  Future<void> _selectFavoritePlatform() async {
+    final value = await _chooseSetting(
+      title: 'Plataforma favorita',
+      options: const [
+        'Todas',
+        'PlayStation 5',
+        'Xbox Series X',
+        'Nintendo Switch',
+      ],
+      selected: UserProfile.favoritePlatform,
+    );
+    if (value == null || !mounted) return;
+    setState(() => UserProfile.favoritePlatform = value);
+    await LocalAuthService.persistPreferences();
+  }
+
+  Future<void> _editDeliveryAddress() async {
+    final profile = UserProfile.currentUser;
+    final addressParts = profile.address.split(' • ');
+    var street = addressParts.length == 4 ? addressParts[0] : profile.address;
+    var neighborhood = addressParts.length == 4 ? addressParts[1] : '';
+    var city = addressParts.length == 4 ? addressParts[2] : profile.city;
+    var postalCode = addressParts.length == 4 ? addressParts[3] : '';
+    final formKey = GlobalKey<FormState>();
+
+    final shouldSave = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: _surface,
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          8,
+          20,
+          MediaQuery.viewInsetsOf(sheetContext).bottom + 24,
+        ),
+        child: SingleChildScrollView(
+          child: Form(
+            key: formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Endereço de entrega',
+                  style: Theme.of(sheetContext).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  key: const ValueKey('delivery-street'),
+                  initialValue: street,
+                  onChanged: (value) => street = value,
+                  validator: (value) => value == null || value.trim().isEmpty
+                      ? 'Informe a rua e o número.'
+                      : null,
+                  decoration: const InputDecoration(labelText: 'Rua e número'),
+                  textCapitalization: TextCapitalization.words,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const ValueKey('delivery-neighborhood'),
+                  initialValue: neighborhood,
+                  onChanged: (value) => neighborhood = value,
+                  validator: (value) => value == null || value.trim().isEmpty
+                      ? 'Informe o bairro.'
+                      : null,
+                  decoration: const InputDecoration(labelText: 'Bairro'),
+                  textCapitalization: TextCapitalization.words,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const ValueKey('delivery-city'),
+                  initialValue: city,
+                  onChanged: (value) => city = value,
+                  validator: (value) => value == null || value.trim().isEmpty
+                      ? 'Informe a cidade e a UF.'
+                      : null,
+                  decoration: const InputDecoration(labelText: 'Cidade/UF'),
+                  textCapitalization: TextCapitalization.words,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  key: const ValueKey('delivery-zip'),
+                  initialValue: postalCode,
+                  onChanged: (value) => postalCode = value,
+                  validator: (value) => value == null || value.trim().isEmpty
+                      ? 'Informe o CEP.'
+                      : null,
+                  decoration: const InputDecoration(labelText: 'CEP'),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 18),
+                FilledButton(
+                  onPressed: () {
+                    if (formKey.currentState!.validate()) {
+                      Navigator.pop(sheetContext, true);
+                    }
+                  },
+                  child: const Text('Salvar endereço'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (shouldSave != true || !mounted) return;
+    final address = [
+      street.trim(),
+      neighborhood.trim(),
+      city.trim(),
+      postalCode.trim(),
+    ].join(' • ');
+    final saved = await LocalAuthService.updateCurrentUserProfile(
+      name: profile.displayName,
+      phone: profile.phone,
+      cpf: profile.cpf,
+      profileImagePath: profile.profileImagePath,
+      city: city,
+      address: address,
+    );
+    if (!mounted) return;
+    if (!saved) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não foi possível salvar o perfil.')),
+      );
+      return;
+    }
+    setState(() {});
+  }
+
+  Future<void> _showAbout() {
+    return showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: _surface,
+      builder: (sheetContext) =>
+          Padding(padding: const EdgeInsets.all(20), child: _buildAboutCard()),
+    );
+  }
+
+  Future<void> _editPlayerDetails() async {
+    final profile = UserProfile.currentUser;
+    var displayName = profile.displayName;
+    var phone = profile.phone;
+    var cpf = profile.cpf;
+    var profileImagePath = profile.profileImagePath;
+    final formKey = GlobalKey<FormState>();
+
+    final shouldSave = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: _surface,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            8,
+            20,
+            MediaQuery.viewInsetsOf(sheetContext).bottom + 24,
+          ),
+          child: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Editar dados do jogador',
+                    style: Theme.of(sheetContext).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 16),
+                  Center(
+                    child: _profileAvatar(
+                      profile.copyWith(
+                        profileImagePath: profileImagePath,
+                        clearProfileImage: profileImagePath == null,
+                      ),
+                      displayName.trim().isEmpty
+                          ? 'J'
+                          : displayName.trim().substring(0, 1).toUpperCase(),
+                      size: 72,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    key: const ValueKey('choose-profile-photo'),
+                    onPressed: () async {
+                      try {
+                        final path = widget.profileImagePicker != null
+                            ? await widget.profileImagePicker!()
+                            : (await ImagePicker().pickImage(
+                                source: ImageSource.gallery,
+                                maxWidth: 512,
+                                imageQuality: 85,
+                              ))?.path;
+                        if (path != null) {
+                          setSheetState(() => profileImagePath = path);
+                        }
+                      } catch (error) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Não foi possível selecionar a foto: $error',
+                              ),
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.photo_library_outlined),
+                    label: const Text('Escolher foto da galeria'),
+                  ),
+                  if (profileImagePath != null)
+                    TextButton(
+                      key: const ValueKey('remove-profile-photo'),
+                      onPressed: () =>
+                          setSheetState(() => profileImagePath = null),
+                      child: const Text('Remover foto'),
+                    ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    key: const ValueKey('profile-name'),
+                    initialValue: displayName,
+                    onChanged: (value) => displayName = value,
+                    decoration: const InputDecoration(
+                      labelText: 'Nome completo',
+                    ),
+                    textCapitalization: TextCapitalization.words,
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? 'Informe seu nome.'
+                        : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    key: const ValueKey('profile-phone'),
+                    initialValue: phone,
+                    onChanged: (value) => phone = value,
+                    decoration: const InputDecoration(
+                      labelText: 'Telefone/WhatsApp',
+                    ),
+                    keyboardType: TextInputType.phone,
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? 'Informe seu telefone.'
+                        : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    key: const ValueKey('profile-cpf'),
+                    initialValue: cpf,
+                    onChanged: (value) => cpf = value,
+                    decoration: const InputDecoration(labelText: 'CPF'),
+                    keyboardType: TextInputType.number,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) return null;
+                      return LocalAuthService.isValidCpf(value)
+                          ? null
+                          : 'Informe um CPF válido.';
+                    },
+                  ),
+                  const SizedBox(height: 18),
+                  FilledButton(
+                    onPressed: () {
+                      if (formKey.currentState!.validate()) {
+                        Navigator.pop(sheetContext, true);
+                      }
+                    },
+                    child: const Text('Salvar dados'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (shouldSave == true && mounted) {
+      final saved = await LocalAuthService.updateCurrentUserProfile(
+        name: displayName,
+        phone: phone,
+        cpf: cpf,
+        profileImagePath: profileImagePath,
+      );
+      if (!mounted) return;
+      if (!saved) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Informe um CPF válido.')));
+        return;
+      }
+      setState(() {});
+    }
+  }
+
+  Future<void> _confirmClearRentalHistory() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Limpar histórico de pedidos?'),
+        content: const Text(
+          'Esta ação remove todas as solicitações demonstrativas desta sessão.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Limpar pedidos'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(Rental.localRequests.clear);
+    await LocalStorageService.saveRentals([]);
+  }
+
+  Future<void> _showRentalTerms() {
+    return showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: _surface,
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Termos de Locação e Caução',
+              style: Theme.of(sheetContext).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Os equipamentos são testados antes da entrega. Cabos e '
+              'acessórios originais são conferidos na retirada e devem '
+              'ser devolvidos junto com o produto, sem danos físicos. '
+              'Valores e caução são apenas demonstrativos; esta versão '
+              'não realiza cobrança nem reserva real.',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _signOut() async {
     _tabHistory.clear();
-    UserProfile.reset();
-    Rental.localRequests.clear();
+    await LocalAuthService.logout();
+    if (!mounted) return;
     Navigator.of(context).pushReplacementNamed(AppRoutes.login);
   }
 
   Widget _buildCategoriesTab() {
-    // Atalhos por categoria reaproveitam os filtros usados na vitrine.
     const categories = [
       (
         'Consoles',
@@ -1216,7 +2049,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildCategoryCard(String name, IconData icon, String description) {
-    // O cartão aplica a categoria e retorna à lista de produtos.
     final itemCount = mockProducts
         .where((product) => product.category == name)
         .length;
@@ -1229,6 +2061,17 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Color.alphaBlend(
+                  AppTheme.emeraldAccent.withValues(alpha: 0.07),
+                  _surface,
+                ),
+                _surface,
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: _textPrimary.withValues(alpha: 0.1)),
           ),

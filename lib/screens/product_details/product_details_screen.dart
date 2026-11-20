@@ -45,7 +45,6 @@ class ProductDetailsScreen extends StatelessWidget {
 
   Widget _buildProductDetails(BuildContext context, Product product) {
     final colorScheme = Theme.of(context).colorScheme;
-    // As seções ficam numa única rolagem para acomodar descrições e listas longas.
     return SafeArea(
       bottom: false,
       child: SingleChildScrollView(
@@ -64,7 +63,6 @@ class ProductDetailsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             _buildAvailability(context, product.demoAvailabilityLabel),
-            // Informações descritivas e técnicas são opcionais conforme o produto.
             const SizedBox(height: 24),
             _buildSectionTitle(context, 'Sobre o produto'),
             const SizedBox(height: 8),
@@ -208,7 +206,6 @@ class ProductDetailsScreen extends StatelessWidget {
     required IconData icon,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
-    // Cada item pode quebrar linha; divisórias ajudam a separar listas maiores.
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -265,7 +262,6 @@ class ProductDetailsScreen extends StatelessWidget {
 
   Widget _buildRentalBar(BuildContext context, Product product) {
     final colorScheme = Theme.of(context).colorScheme;
-    // O rodapé mantém preço e próxima ação acessíveis enquanto os detalhes rolam.
     return SafeArea(
       top: false,
       child: Container(
@@ -332,7 +328,7 @@ class ProductDetailsScreen extends StatelessWidget {
 
   Widget _buildMissingProduct(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    // Evita uma tela vazia quando a rota é aberta sem um produto válido.
+    // Exibe estado vazio apenas quando o catálogo não contém produtos.
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),

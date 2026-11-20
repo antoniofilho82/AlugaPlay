@@ -131,3 +131,32 @@ Evoluções planejadas para as próximas fases:
 - **Antonio Moura da Costa Filho** — Tela Inicial / Catálogo (`HomeScreen`) e Tela de Detalhes do Produto (`ProductDetailsScreen`).
 - **Enzo de Melo Cordeiro** — Tela de Abertura (`SplashScreen`) e Tela de Acesso (`LoginScreen`).
 - **Marcus Vinicius Ferreira Lustosa** — Tela de Solicitação de Aluguel (`RentalScreen`).
+## Configurações e experiência de locação
+
+Na aba **Perfil**, o jogador pode editar nome, telefone/WhatsApp e cidade, além de
+definir modalidade padrão (retirada ou delivery), duração (1, 3 ou 7 dias) e
+plataforma favorita. As preferências de aparência oferecem os modos Sistema,
+Claro e Escuro; também é possível configurar lembretes de devolução e novidades
+do catálogo. Esses dados ficam em memória durante a sessão demonstrativa.
+
+Na Home, o filtro rápido usa a plataforma favorita escolhida no Perfil. No fluxo
+de locação, chips permitem selecionar 1 dia, 3 dias (fim de semana) ou 7 dias
+(semana), e um cartão resume os cuidados com conservação e caução.
+
+## Autenticação local
+
+O acesso exige uma conta criada no próprio aplicativo: cadastro, login e
+recuperação de senha são mantidos somente em memória nesta demonstração, sem
+servidor ou dependências adicionais. A opção **Lembrar meu acesso** preenche
+e-mail e senha na próxima abertura da tela e mantém esses dados após sair da
+conta; desmarcá-la remove os dados lembrados. A tela **Criar Nova Conta** valida
+os dados e autentica após o cadastro. Em **Recuperar Senha**, o e-mail é
+verificado localmente antes de permitir redefinir a senha.
+
+## Endereço de entrega
+
+O cadastro rápido solicita somente nome, e-mail, telefone/WhatsApp e senha.
+Cidade e endereço são opcionais e podem ser adicionados em Perfil. A tela de
+locação preenche o endereço salvo quando a modalidade selecionada é Delivery;
+sem endereço cadastrado, o campo fica disponível para preenchimento no pedido.
+

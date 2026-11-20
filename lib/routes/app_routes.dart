@@ -12,22 +12,16 @@ import '../screens/splash/splash_screen.dart';
 class AppRoutes {
   AppRoutes._();
 
-  /// Tela apresentada ao iniciar o aplicativo.
   static const String splash = '/';
 
-  /// Entrada demonstrativa antes de acessar o catálogo.
   static const String login = '/login';
 
-  /// Vitrine principal de produtos e abas da aplicação.
   static const String home = '/home';
 
-  /// Detalhes do produto, recebido pelo argumento da navegação.
   static const String productDetails = '/product-details';
 
-  /// Solicitação de aluguel do produto recebido em `arguments`.
   static const String rental = '/rental';
 
-  /// Associa cada caminho à tela que deve ser construída pelo navegador.
   static Map<String, WidgetBuilder> get routes => {
     splash: (_) => const SplashScreen(),
     login: (_) => const LoginScreen(),

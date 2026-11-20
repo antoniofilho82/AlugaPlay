@@ -9,20 +9,16 @@ class AlugaPlayApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Reconstrói o MaterialApp quando o modo de tema observado é alterado.
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: AppTheme.themeModeNotifier,
       builder: (context, mode, _) {
         return MaterialApp(
-          // Define uma identificação estável e esconde a faixa de depuração.
           title: 'AlugaPlay',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
           themeMode: mode,
-          // Evita animar a troca e aplica o tema novo imediatamente.
           themeAnimationDuration: Duration.zero,
-          // Mantém a entrada e os destinos centralizados nas rotas nomeadas.
           initialRoute: AppRoutes.splash,
           routes: AppRoutes.routes,
         );

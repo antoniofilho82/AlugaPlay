@@ -1,6 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
-/// Centraliza o tema claro/escuro e a identidade neutra com Verde Esmeralda.
+/// Centraliza o tema escuro grafite e o tema claro pastel do AlugaPlay.
 class AppTheme {
   AppTheme._();
 
@@ -8,12 +8,52 @@ class AppTheme {
   static final ValueNotifier<ThemeMode> themeModeNotifier =
       ValueNotifier<ThemeMode>(ThemeMode.system);
 
-  /// Verde Esmeralda usado nas ações principais nos dois modos.
+  /// Verde de referência para componentes e estados destacados.
   static const Color emerald = Color(0xFF16A34A);
 
   /// Tons secundários de esmeralda usados em acentos e estados sutis.
   static const Color emeraldAccent = Color(0xFF22C55E);
   static const Color emeraldDeep = Color(0xFF059669);
+
+  /// Degradê principal compartilhado por ações e estados selecionados.
+  static const LinearGradient primaryGradient = LinearGradient(
+    colors: [Color(0xFF22C55E), Color(0xFF16A34A), Color(0xFF059669)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  /// Fundo do destaque da semana, ajustado ao contraste de cada tema.
+  static LinearGradient heroBannerGradient(Brightness brightness) {
+    final isDark = brightness == Brightness.dark;
+    return LinearGradient(
+      colors: isDark
+          ? const [Color(0xFF123521), Color(0xFF10291E), Color(0xFF181B20)]
+          : const [Color(0xFFD7E7DD), Color(0xFFE5EFE8), Color(0xFFEEF4F0)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    );
+  }
+
+  /// Halo suave para a área superior sem competir com o conteúdo.
+  static RadialGradient topAmbientGradient(Brightness brightness) {
+    final isDark = brightness == Brightness.dark;
+    return RadialGradient(
+      center: Alignment.topCenter,
+      radius: 1.15,
+      colors: isDark
+          ? [
+              emeraldAccent.withValues(alpha: 0.2),
+              emeraldDeep.withValues(alpha: 0.08),
+              Colors.transparent,
+            ]
+          : [
+              const Color(0xFF389E68).withValues(alpha: 0.14),
+              const Color(0xFF2E8B57).withValues(alpha: 0.05),
+              Colors.transparent,
+            ],
+      stops: const [0, 0.48, 1],
+    );
+  }
 
   /// Raios compartilhados para manter consistência entre componentes.
   static const double radiusMedium = 12.0;
@@ -41,16 +81,17 @@ class AppTheme {
     foregroundVariant: const Color(0xFF94A3B8),
   );
 
-  /// Monta o esquema claro com fundo frio, superfícies brancas e verde profundo.
+  /// Usa superfícies verde-acinzentadas e acentos esmeralda de menor brilho.
   static ThemeData _buildLightTheme() => _buildTheme(
     brightness: Brightness.light,
-    background: const Color(0xFFEEF2F6),
-    surface: const Color(0xFFFFFFFF),
-    surfaceContainer: const Color(0xFFE2E8F0),
-    outline: const Color(0xFFCBD5E1),
-    foreground: const Color(0xFF0F172A),
-    foregroundVariant: const Color(0xFF475569),
-    secondary: const Color(0xFF15803D),
+    background: const Color(0xFFE3ECE6),
+    surface: const Color(0xFFE3ECE6),
+    surfaceContainer: const Color(0xFFEEF4F0),
+    outline: const Color(0xFFC8D8CE),
+    foreground: const Color(0xFF233029),
+    foregroundVariant: const Color(0xFF52645A),
+    primary: const Color(0xFF2E8B57),
+    secondary: const Color(0xFF389E68),
   );
 
   static ThemeData _buildTheme({
@@ -61,14 +102,16 @@ class AppTheme {
     required Color outline,
     required Color foreground,
     required Color foregroundVariant,
+    Color? primary,
     Color? secondary,
   }) {
     final isDark = brightness == Brightness.dark;
+    final primaryColor = primary ?? emerald;
     final secondaryColor = secondary ?? (isDark ? emeraldAccent : emeraldDeep);
     final colorScheme =
         (isDark
                 ? ColorScheme.dark(
-                    primary: emerald,
+                    primary: primaryColor,
                     onPrimary: const Color(0xFFFFFFFF),
                     secondary: secondaryColor,
                     onSecondary: const Color(0xFF052E1B),
@@ -78,7 +121,7 @@ class AppTheme {
                     onError: const Color(0xFFFFFFFF),
                   )
                 : ColorScheme.light(
-                    primary: emerald,
+                    primary: primaryColor,
                     onPrimary: const Color(0xFFFFFFFF),
                     secondary: secondaryColor,
                     onSecondary: const Color(0xFFFFFFFF),
@@ -90,13 +133,11 @@ class AppTheme {
             .copyWith(
               primaryContainer: isDark
                   ? const Color(0xFF123521)
-                  : const Color(0xFFD1FAE5),
-              onPrimaryContainer: isDark
-                  ? const Color(0xFFD1FAE5)
-                  : const Color(0xFF064E3B),
+                  : const Color(0xFFD7E7DD),
+              onPrimaryContainer: isDark ? const Color(0xFFD1FAE5) : foreground,
               secondaryContainer: surfaceContainer,
               onSecondaryContainer: foreground,
-              tertiary: emeraldDeep,
+              tertiary: isDark ? emeraldDeep : secondaryColor,
               onTertiary: const Color(0xFFFFFFFF),
               surfaceDim: background,
               surfaceBright: surface,
@@ -152,7 +193,7 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: emerald,
+          backgroundColor: colorScheme.primary,
           foregroundColor: const Color(0xFFFFFFFF),
           minimumSize: const Size(64, 48),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -203,7 +244,10 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMedium),
-          borderSide: const BorderSide(color: emeraldAccent, width: 1.5),
+          borderSide: BorderSide(
+            color: isDark ? emeraldAccent : colorScheme.primary,
+            width: 1.5,
+          ),
         ),
         disabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMedium),
@@ -211,8 +255,8 @@ class AppTheme {
         ),
       ),
       cardTheme: CardThemeData(
-        color: surface,
-        surfaceTintColor: surface,
+        color: isDark ? surface : surfaceContainer,
+        surfaceTintColor: isDark ? surface : surfaceContainer,
         shadowColor: background,
         elevation: 0,
         shape: RoundedRectangleBorder(
@@ -223,7 +267,7 @@ class AppTheme {
       iconTheme: IconThemeData(color: colorScheme.secondary),
       chipTheme: ChipThemeData(
         backgroundColor: surfaceContainer,
-        selectedColor: emerald,
+        selectedColor: colorScheme.primary,
         checkmarkColor: const Color(0xFFFFFFFF),
         labelStyle: TextStyle(color: foreground),
         secondaryLabelStyle: TextStyle(color: foreground),
@@ -246,7 +290,7 @@ class AppTheme {
         elevation: 0,
         indicatorColor: isDark
             ? const Color(0xFF123521)
-            : const Color(0xFFD1FAE5),
+            : const Color(0xFFD7E7DD),
         iconTheme: WidgetStateProperty.resolveWith<IconThemeData?>(
           (states) => IconThemeData(
             color: states.contains(WidgetState.selected)

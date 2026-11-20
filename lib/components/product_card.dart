@@ -1,23 +1,20 @@
 import 'package:material_ui/material_ui.dart';
 
 import '../models/product.dart';
+import '../theme/app_theme.dart';
 import 'primary_button.dart';
 
 /// Cartão compartilhado para apresentar um produto de forma resumida e acionável.
 class ProductCard extends StatelessWidget {
-  /// Mantém produto e ação de toque fornecidos pela tela que lista o cartão.
   const ProductCard({super.key, required this.product, required this.onTap});
 
-  /// Item cujos dados são exibidos.
   final Product product;
 
-  /// Abre os detalhes do mesmo item selecionado.
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    // Textos longos são limitados para que os cards permaneçam legíveis em telas estreitas.
     return Card(
       color: colorScheme.surface,
       margin: EdgeInsets.zero,
@@ -33,12 +30,24 @@ class ProductCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // O ícone garante uma representação local, mesmo sem imagem de rede.
               SizedBox(
                 height: 100,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: colorScheme.surfaceContainerHighest,
+                    gradient: LinearGradient(
+                      colors: [
+                        Color.alphaBlend(
+                          AppTheme.emeraldAccent.withValues(alpha: 0.12),
+                          colorScheme.surfaceContainerHighest,
+                        ),
+                        Color.alphaBlend(
+                          AppTheme.emeraldDeep.withValues(alpha: 0.07),
+                          colorScheme.surfaceContainerHighest,
+                        ),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Stack(
@@ -113,7 +122,6 @@ class ProductCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 14),
-              // A área de preço pode encolher, enquanto a ação mantém tamanho compacto.
               Row(
                 children: [
                   Expanded(
