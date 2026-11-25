@@ -1,6 +1,6 @@
 # AlugaPlay
 
-### Plataforma mobile para locação de consoles, jogos físicos e pacotes gamer
+### Plataforma mobile demonstrativa para explorar consoles, jogos físicos e pacotes gamer
 
 ![Flutter](https://img.shields.io/badge/Flutter-mobile-02569B?logo=flutter)
 ![Dart](https://img.shields.io/badge/Dart-%5E3.14.0-0175C2?logo=dart)
@@ -9,22 +9,20 @@
 
 ## Sobre o Projeto
 
-O AlugaPlay é um protótipo de uma plataforma para explorar e solicitar a locação de consoles, jogos físicos e pacotes de acessórios. A proposta é oferecer uma forma flexível de experimentar produtos gamer sem o custo de aquisição definitiva.
+O AlugaPlay é um protótipo Flutter para explorar e solicitar a locação de consoles, jogos físicos e pacotes de acessórios. O MVP concentra-se em navegação, catálogo local, cadastro e login demonstrativos, perfil, filtros, estimativa de período e histórico local de solicitações.
 
-O público-alvo são jogadores interessados em testar diferentes plataformas e pessoas que procuram conjuntos prontos para jogar. O MVP da Fase 1 concentra-se no front-end mobile: apresenta catálogo, detalhes dos produtos, escolha de período, estimativa de valor e acompanhamento das solicitações.
-
-> **Importante:** este é um protótipo demonstrativo. O catálogo, o perfil e as solicitações são mantidos em memória; não há autenticação real, disponibilidade de estoque, reserva persistente ou pagamento.
+> **Importante:** a autenticação, o estoque, a reserva e o pagamento são demonstrativos. Contas, perfil, preferências e solicitações são gravados localmente no aparelho por `SharedPreferences`; não há backend, cobrança, verificação KYC externa ou disponibilidade em tempo real.
 
 ## Funcionalidades Implementadas
 
-- **Splash Screen animada:** entrada da marca com fade e escala usando `AnimationController`, seguida de redirecionamento automático para o login.
-- **Acesso demonstrativo:** login com alternância da visibilidade da senha; o e-mail informado gera um nome de exibição e uma `@gamertag` para o perfil da sessão.
-- **Catálogo interativo (`HomeScreen`):** busca em tempo real por nome ou plataforma combinada com filtros `Todos`, `Consoles`, `Jogos` e `Pacotes`, além de destaque semanal e seção de pacotes especiais.
-- **Detalhes do produto (`ProductDetailsScreen`):** informações e especificações técnicas, itens incluídos, indicação de disponibilidade demonstrativa e tarifa.
-- **Solicitação de aluguel (`RentalScreen`):** seleção de retirada e devolução, validação do período mínimo de um dia, estimativa para tarifa diária ou semanal proporcional, observações e confirmação local.
-- **Meus Aluguéis:** solicitações da sessão em ordem da mais recente para a mais antiga, com resumo e opção de cancelamento.
-- **Perfil:** dados da conta demonstrativa, contagem de solicitações, atalhos de navegação e ação para sair da conta.
-- **Modo Claro e Modo Escuro:** alternância instantânea no cabeçalho da Home e no Perfil; os temas são reutilizados para evitar reconstruções durante a troca.
+- **Splash Screen:** apresentação da marca por asset local, barra de progresso e espera da restauração local antes do redirecionamento.
+- **Acesso demonstrativo:** contas locais com cadastro, login, recuperação de senha e opção de lembrar o acesso.
+- **Catálogo interativo (`HomeScreen`):** busca por nome ou plataforma combinada com categoria, console/plataforma e estilo inferido das informações locais.
+- **Detalhes do produto (`ProductDetailsScreen`):** informações, especificações técnicas, itens incluídos e tarifa do catálogo local.
+- **Solicitação de aluguel (`RentalScreen`):** seleção de datas, modalidade retirada/delivery, endereço, observações, validação de período e estimativa local.
+- **Meus Aluguéis:** solicitações persistidas, ordenadas da mais recente para a mais antiga, com cancelamento e limpeza do histórico.
+- **Perfil:** edição de dados, CPF com validação local, foto da galeria, preferências e logout.
+- **Modo Claro e Modo Escuro:** alternância instantânea com temas centralizados e cacheados em `AppTheme`.
 - **Navegação inteligente do botão Voltar:** histórico das abas da Home, retorno por abas visitadas e navegação de volta entre as telas de detalhes e solicitação.
 - **Identidade Android:** ícone adaptativo vetorial alinhado ao emblema da SplashScreen e splash nativa configurada para não duplicar a marca no Android 12+.
 
@@ -32,16 +30,18 @@ O público-alvo são jogadores interessados em testar diferentes plataformas e p
 
 | Modo | Elemento | Cor |
 |---|---|---|
-| Escuro | Fundo grafite neutro | `#0F1115` |
-| Escuro | Superfícies e cards | `#181B20` |
-| Escuro | Bordas | `#2E3440` |
-| Escuro | Verde Esmeralda primário e acento | `#16A34A` / `#22C55E` |
+| Escuro | Fundo azul-noturno | `#050811` |
+| Escuro | Superfícies | `#0A1224` |
+| Escuro | Containers | `#101B36` |
+| Escuro | Azul primário / ciano | `#2563EB` / `#38BDF8` |
+| Escuro | Amarelo de destaque | `#FACC15` |
 | Escuro | Textos claros | `#F8FAFC` |
-| Claro | Fundo cinza-azulado suave | `#EEF2F6` |
-| Claro | Superfícies e cards brancos | `#FFFFFF` |
-| Claro | Bordas | `#CBD5E1` |
-| Claro | Verde Esmeralda primário e profundo | `#16A34A` / `#15803D` |
-| Claro | Textos escuros | `#0F172A` |
+| Claro | Fundo neutro | `#F8FAFC` |
+| Claro | Superfícies brancas | `#FFFFFF` |
+| Claro | Containers azulados | `#EFF6FF` |
+| Claro | Azul primário | `#1D4ED8` |
+| Claro | Amarelo âmbar | `#A16207` |
+| Claro | Textos escuros | `#0F172A` / `#334155` |
 
 Os dois temas e os estilos globais são centralizados em `AppTheme`, em `lib/theme/app_theme.dart`. O `ValueNotifier<ThemeMode>` atualiza a aparência em runtime, e `themeAnimationDuration: Duration.zero` aplica a troca sem animação.
 
@@ -52,12 +52,13 @@ assets/
 ├── icons/                 # Ícones e recursos visuais do aplicativo
 └── images/                # Imagens locais
 lib/
-├── app/                   # Configuração da aplicação Flutter
+├── app/                   # Configuração do MaterialApp
 ├── components/            # Widgets reutilizáveis
 ├── data/                  # Catálogo demonstrativo
 ├── models/                # Modelos Product, Rental e UserProfile
 ├── routes/                # Constantes e registro das rotas nomeadas
 ├── screens/               # Splash, Login, Home, Detalhes e Solicitação
+├── services/              # Inicialização, autenticação e persistência locais
 └── theme/                 # Paleta e tema global
 test/
 └── widget_test.dart       # Testes de widget das jornadas principais
@@ -99,14 +100,11 @@ flutter run
 flutter analyze && flutter test --no-pub
 ```
 
-Os seis testes de widget cobrem:
-
-1. Redirecionamento da Splash para Login.
-2. Jornada de aluguel completa, registro da solicitação e cancelamento.
-3. Busca na Home em viewport compacto de `360x800`.
-4. Exibição do e-mail no Perfil e logout para a tela de Login.
-5. Alternância entre os temas claro e escuro e restauração do modo anterior.
-6. Histórico do botão Voltar entre Categorias e Meus Aluguéis, além do retorno dos Detalhes à Home.
+O conjunto atual possui 16 casos: 14 testes de widget e 2 testes unitários.
+Ele cobre Splash e restauração, jornada de aluguel, busca e filtros, temas,
+histórico de navegação, Perfil, CPF/foto, autenticação local, cadastro e
+auto-login. Os detalhes completos estão em
+[`Relatorio_Tecnico.md`](./Relatorio_Tecnico.md).
 
 ### Gerar APK de demonstração
 
@@ -118,13 +116,13 @@ flutter build apk --debug
 
 A documentação técnica detalhada do código, arquitetura, regras de negócio, testes, limitações e diagnóstico está disponível nos relatórios técnicos da raiz do repositório, incluindo [`Relatorio_Tecnico.md`](./Relatorio_Tecnico.md).
 
-Evoluções planejadas para as próximas fases:
+Possíveis evoluções futuras, ainda não implementadas neste repositório:
 
-- Persistência local de perfil e solicitações.
-- Autenticação real com Firebase Auth.
-- Catálogo dinâmico e dados em nuvem, por exemplo com Firestore.
-- Controle de disponibilidade por período.
-- Integração com gateway de pagamento.
+- Autenticação e catálogo conectados a um backend.
+- Controle de disponibilidade e estoque por período.
+- Processamento real de pagamento e revisão de políticas de KYC.
+- Sincronização remota de perfil e solicitações.
+- Medição real de FPS, memória e cold start em dispositivos físicos.
 
 ## Equipe de Desenvolvimento
 
@@ -137,21 +135,20 @@ Na aba **Perfil**, o jogador pode editar nome, telefone/WhatsApp e cidade, além
 definir modalidade padrão (retirada ou delivery), duração (1, 3 ou 7 dias) e
 plataforma favorita. As preferências de aparência oferecem os modos Sistema,
 Claro e Escuro; também é possível configurar lembretes de devolução e novidades
-do catálogo. Esses dados ficam em memória durante a sessão demonstrativa.
+do catálogo. Esses dados são persistidos localmente por `SharedPreferences`.
 
-Na Home, o filtro rápido usa a plataforma favorita escolhida no Perfil. No fluxo
-de locação, chips permitem selecionar 1 dia, 3 dias (fim de semana) ou 7 dias
-(semana), e um cartão resume os cuidados com conservação e caução.
+Na Home, categoria, busca, console/plataforma e estilo podem ser combinados.
+No fluxo de locação, o usuário escolhe datas e modalidade, com validação mínima
+de um dia. Não há cobrança real nem confirmação de estoque externa.
 
 ## Autenticação local
 
 O acesso exige uma conta criada no próprio aplicativo: cadastro, login e
-recuperação de senha são mantidos somente em memória nesta demonstração, sem
-servidor ou dependências adicionais. A opção **Lembrar meu acesso** preenche
-e-mail e senha na próxima abertura da tela e mantém esses dados após sair da
-conta; desmarcá-la remove os dados lembrados. A tela **Criar Nova Conta** valida
-os dados e autentica após o cadastro. Em **Recuperar Senha**, o e-mail é
-verificado localmente antes de permitir redefinir a senha.
+recuperação de senha são mantidos localmente. A opção **Lembrar meu acesso**
+guarda o e-mail e a preferência da sessão, mas nunca pré-preenche a senha.
+Desmarcá-la impede o auto-login. A tela **Criar Nova Conta** valida os dados e
+autentica após o cadastro. Em **Recuperar Senha**, o e-mail é verificado
+localmente antes de permitir redefinir a senha.
 
 ## Endereço de entrega
 

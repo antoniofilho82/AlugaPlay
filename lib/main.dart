@@ -6,13 +6,11 @@ import 'services/local_auth_service.dart';
 import 'services/local_storage_service.dart';
 import 'services/startup_service.dart';
 
-// Inicia a restauração antes do primeiro frame sem aguardar o armazenamento.
+// Inicia a restauração local antes do primeiro frame e compartilha seu progresso
+// com a Splash, sem bloquear a execução inicial do aplicativo.
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  StartupService.isReady = false;
-  StartupService.initialization = _initializeLocalData().then((_) {
-    StartupService.isReady = true;
-  });
+  StartupService.initialize(_initializeLocalData);
   runApp(const AlugaPlayApp());
 }
 

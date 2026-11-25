@@ -1,14 +1,12 @@
 # AlugaPlay — Relatório Técnico
 
-> **Estado verificado:** 20 de novembro de 2026  
-> **Escopo:** aplicação Flutter, testes de widget e recursos de abertura Android.  
-> **Validação:** `flutter analyze && flutter test --no-pub` — análise limpa e 15 testes aprovados.
+> **Estado verificado:** 25 de novembro de 2026  
+> **Escopo:** aplicação Flutter, testes de widget e recursos nativos Android de abertura.  
+> **Validação:** `flutter analyze && flutter test --no-pub`
 
-Este relatório descreve o código presente no repositório, não uma arquitetura futura. O AlugaPlay é um protótipo demonstrativo: autenticação, catálogo, estimativas e solicitações são locais; não há servidor, estoque real, reserva comercial nem cobrança.
+Este relatório descreve o estado atual do repositório. O AlugaPlay é um protótipo demonstrativo: autenticação, catálogo, estimativas e solicitações são locais. Não há servidor, estoque em tempo real, reserva comercial, cobrança, consulta de KYC ou pagamento externo.
 
 ## 1. Estrutura e navegação
-
-O código Dart está organizado por responsabilidade:
 
 ```text
 lib/
@@ -29,136 +27,139 @@ lib/
 test/widget_test.dart
 ```
 
-`AlugaPlayApp` configura os temas e as rotas nomeadas. `HomeScreen` mantém as quatro abas fixas — Início, Categorias, Meus Aluguéis e Perfil — em um `IndexedStack`; a troca de aba não empilha novas rotas. Um histórico interno permite que Voltar percorra as abas visitadas antes de limpar filtros ou sair da Home.
+`AlugaPlayApp` centraliza tema claro/escuro e rotas nomeadas. `HomeScreen` mantém as abas Início, Categorias, Meus Aluguéis e Perfil em um `IndexedStack`, preservando o estado enquanto alterna entre elas. Um histórico interno permite que o botão Voltar percorra abas visitadas antes de limpar filtros ou sair da Home.
 
-O produto selecionado é encaminhado como argumento para Detalhes e Solicitação. As telas aceitam o argumento somente quando ele é um `Product`; se estiver ausente ou inválido, usam o primeiro item do catálogo local. Esse fallback evita erro de tipo, mas pode apresentar um produto diferente do pretendido ao abrir uma rota diretamente.
+`ProductDetailsScreen` recebe o produto como argumento da rota. Quando o argumento não é um `Product`, o catálogo local fornece o primeiro item como fallback. O mesmo produto é repassado para `RentalScreen`.
 
-## 2. Abertura, identidade visual e tema
+## 2. Inicialização e identidade visual
 
-### Splash e inicialização
+`main()` usa `WidgetsFlutterBinding.ensureInitialized`, inicia `StartupService.initialize` com `LocalStorageService.init`, restauração da autenticação e restauração dos aluguéis, e chama `runApp`. A inicialização ocorre antes da navegação da Splash, mas não bloqueia diretamente a construção inicial do app.
 
-`main()` inicia a restauração local e chama `runApp` sem aguardar operações de armazenamento, permitindo que a Splash seja desenhada sem essa espera. `StartupService` compartilha o estado e a `Future` da inicialização. A Splash espera a restauração terminar antes de decidir o destino; assim, uma leitura lenta não deve encaminhar uma sessão lembrada para a Login prematuramente.
+`StartupService` compartilha a `Future` da restauração e o estado de erro. `SplashScreen` aguarda essa `Future` somente quando `isReady` ainda é falso, exige pelo menos três segundos de visibilidade e usa `mounted` e `_hasNavigated` para evitar rota dupla ou atualização após descarte. Em caso de falha, apresenta opção de tentar novamente.
 
-Após o primeiro frame, a barra progride de zero a um com `Curves.easeInOut` em 1.400 ms. A tela aguarda pelo menos 1.500 ms e usa `LocalAuthService.shouldAutoLogin` para ir diretamente à Home ou à Login. Um rótulo semântico `AlugaPlay` identifica a tela. O fundo Flutter é desenhado por `CustomPainter` com ondas esmeralda antialiasadas, emblema, marca e subtítulo; a imagem `assets/images/splash_bg.jpeg` está declarada, mas não é usada pela Splash atual.
+A tela usa `assets/images/splash_screen.png`, fundo preto e barra de progresso ciano. Não utiliza `CustomPainter`, asset antigo `splash_bg.jpeg` ou elementos verdes. A tela não afirma disponibilidade ou autenticação de backend.
 
-O `AlugaPlayLogo` é reutilizado na Splash, Login, cadastro e recuperação de senha. Na Login, somente o texto “Criar nova conta” é clicável; a frase anterior permanece em cor neutra.
+A identidade Flutter usa azul `#2563EB`, ciano `#38BDF8`, azul-noturno `#050811`, azul profundo `#1D4ED8` e amarelo `#FACC15`. `AppTheme` possui temas claro/escuro cacheados e um `ValueNotifier<ThemeMode>` para alternância em runtime; `themeAnimationDuration` é `Duration.zero`.
 
 ### Abertura nativa Android
 
-O fundo nativo usa `#060D09` e centraliza `@mipmap/ic_launcher`. A imagem está configurada no `launch_background.xml` padrão e na variante `drawable-v21`; em Android 12 ou superior, `values-v31/styles.xml` usa o mesmo ícone na Splash do sistema. As variantes claro e escuro mantêm o fundo escuro.
+A janela nativa usa o fundo `#050811`. `launch_background.xml` e `drawable-v21/launch_background.xml` usam apenas esse fundo. Android 12+ usa o mesmo fundo e define o ícone animado transparente no launch theme. O ícone da aplicação é configurado como adaptativo por `flutter_launcher_icons`, mas o comportamento visual nativo não deve ser considerado validado sem build ou execução em dispositivo.
 
-O ícone Android é configurado por `flutter_launcher_icons` com `assets/icon/app_icon.jpeg`, como foreground adaptativo e ícone de inicialização. Os recursos já gerados no projeto não substituem a validação de um build em dispositivo.
+## 3. Arquitetura e responsabilidades
 
-### Paleta
+- **Interface:** `screens/`, `components/` e `routes/` concentram telas, widgets reutilizáveis e constantes de navegação.
+- **Serviços:** `StartupService` coordena a inicialização; `LocalStorageService` encapsula JSON em `SharedPreferences`; `LocalAuthService` controla contas demonstrativas, sessão, perfil e preferências.
+- **Modelos/dados:** `Product`, `Rental` e `UserProfile` representam dados locais; `mockProducts` fornece o catálogo demonstrativo.
+- **Persistência:** a aplicação grava usuários, sessão, perfil, preferências e solicitações em chaves separadas do `SharedPreferences`.
+- **Tema:** `AppTheme` centraliza cores, gradientes, raios e estilos globais.
 
-`AppTheme` mantém temas cacheados e alterna o modo por `ValueNotifier<ThemeMode>`. O tema claro pastel usa:
+## 4. Catálogo e filtros locais
 
-| Elemento | Cor |
-|---|---|
-| Fundo e superfície base | `#E3ECE6` |
-| Cards, campos e containers | `#EEF4F0` |
-| Contornos | `#C8D8CE` |
-| Texto principal / secundário | `#233029` / `#52645A` |
-| Primária / secundária | `#2E8B57` / `#389E68` |
-| Container de destaque | `#D7E7DD` |
+O catálogo contém dados fictícios locais de consoles, jogos físicos e pacotes. Não há carregamento por rede.
 
-O modo escuro usa fundo `#0F1115`, superfície `#181B20`, container `#22262E`, texto `#F8FAFC` / `#94A3B8` e acentos esmeralda. A troca de tema não anima os estilos (`Duration.zero`).
+Na aba Início, categoria, texto de busca, plataforma e estilo são combinados. Nenhum filtro substitui outro:
 
-## 3. Catálogo e filtros
+- Categoria usa `Todos`, `Consoles`, `Jogos` ou `Pacotes`.
+- Plataforma deriva dos campos `platform` do catálogo.
+- Estilo não é um campo do modelo; é inferido por palavras-chave em nome, descrição e especificações.
+- O modal aplica plataforma e estilo juntos somente ao confirmar.
+- Buscar e limpar filtros também atualiza o estado local da tela.
 
-`mockProducts` fornece oito itens fictícios — consoles, jogos físicos e pacotes — sem carregamento de rede. As tarifas cadastradas são diárias.
+A combinação pode não encontrar resultados; a interface apresenta um estado vazio com ação para limpar filtros.
 
-Na aba Início, categoria, texto de busca, console/plataforma e estilo de jogo são combinados; um filtro não substitui os demais. As plataformas são derivadas dos produtos. Como o modelo não tem campo de gênero, os estilos são inferidos por palavras-chave no nome, descrições e especificações, e só aparecem quando há pelo menos um jogo ou pacote correspondente. O funil abre o modal Filtros rápidos; suas escolhas são aplicadas juntas, e o resumo permite limpar rapidamente os filtros específicos de console e estilo.
+## 5. Contas, perfil e sessão
 
-## 4. Contas, perfil e sessão local
+`LocalAuthService` mantém contas em memória durante a execução e delega persistência a `LocalStorageService`. O cadastro valida nome, telefone, formato de e-mail e senha com pelo menos seis caracteres. A tela de Login autentica somente contra a conta criada no dispositivo.
 
-`LocalAuthService` mantém contas em memória e delega a gravação ao `LocalStorageService`. O cadastro valida nome, telefone, formato de e-mail e tamanho mínimo da senha. A tela de Login autentica contra as contas cadastradas no aparelho; a recuperação de senha também é local e não envia mensagens externas.
+Com `Lembrar meu acesso` ativo, a sessão persiste `rememberAccess`, `rememberedEmail` e `currentUserEmail`; nunca persiste a senha. `shouldAutoLogin` exige simultaneamente a opção ativa e uma conta atual restaurada. Logout remove a sessão ativa, mas mantém contas e solicitações locais.
 
-Com “Lembrar meu acesso” ativo, a sessão guarda a opção e os e-mails necessários à restauração, não a senha. Depois da restauração, o getter `shouldAutoLogin` só retorna verdadeiro se houver uma conta atual válida. A Login pode restaurar o e-mail, mas cria o controlador da senha vazio. Logout limpa a sessão e o perfil ativo, sem apagar a conta nem o histórico de aluguéis.
+A senha é salva em JSON no registro da conta para viabilizar autenticação demonstrativa e não é cifrada por `SharedPreferences`. Esse mecanismo não oferece segurança adequada para produção. Recuperação de senha altera apenas o registro local e não envia mensagens externas.
 
-**Limite de segurança:** a senha continua no registro JSON da conta para permitir a autenticação local e não é cifrada por `shared_preferences`. Este mecanismo é demonstrativo e não deve ser usado como armazenamento seguro de credenciais.
+O perfil persiste nome, e-mail, telefone, cidade, endereço, CPF e caminho da foto. A foto é escolhida pela galeria e seu caminho é armazenado; uma imagem inacessível usa a inicial do nome sobre degradê azul.
 
-O perfil persistido inclui nome, e-mail, telefone, endereço, cidade, CPF e caminho da foto. Quando não há imagem utilizável, a aba Perfil e o modal Editar mostram a inicial do nome em branco sobre degradê esmeralda. A imagem é selecionada pela galeria; apenas seu caminho é salvo, então um arquivo removido ou inacessível aciona o fallback da inicial.
+O CPF é opcional. Quando informado ou editado no Perfil, a validação remove pontuação, rejeita tamanho incorreto e sequências repetidas e calcula os dois dígitos verificadores pelo módulo 11. Não há consulta externa. `isKycVerified` permanece um estado demonstrativo não verificado pelo aplicativo.
 
-O CPF é opcional. Se informado ao serviço de autenticação ou editado no Perfil, a validação local remove pontuação, rejeita quantidade incorreta de dígitos e sequências repetidas e calcula os dois verificadores módulo 11. A tela de cadastro não solicita CPF e não há consulta externa. `isKycVerified` é um campo persistido do modelo, mas o aplicativo não implementa verificação KYC nem o marca como verificado.
+## 6. Persistência local
 
-## 5. Persistência local
-
-`LocalStorageService` inicializa `SharedPreferences` e armazena snapshots JSON em chaves separadas:
+`LocalStorageService` inicializa uma única instância de `SharedPreferences` e usa JSON nas chaves `alugaplay.users`, `session`, `profile`, `preferences` e `rentals`.
 
 | Dados | Conteúdo |
 |---|---|
-| Usuários | Nome, e-mail, telefone, cidade, endereço, CPF, senha, estado KYC e caminho de foto. |
-| Sessão | `rememberAccess`, `rememberedEmail` e `currentUserEmail`; não contém senha. |
-| Perfil | Dados de exibição e contato do jogador. |
-| Preferências | Tema, notificações, modalidade e duração padrão e plataforma favorita. |
-| Solicitações | Produto, datas, duração, total estimado, observações, estado, modalidade/endereço e campos adicionais do modelo. |
+| Usuários | Nome, e-mail, telefone, cidade, endereço, CPF, senha e estado KYC. |
+| Sessão | Opção “lembrar”, e-mail lembrado e e-mail da conta atual. |
+| Perfil | Nome, e-mail, telefone, endereço, cidade, CPF e caminho da foto. |
+| Preferências | Tema, notificações, modalidade, duração padrão e plataforma favorita. |
+| Solicitações | Produto, datas, duração, total estimado, observações, estado e endereço/modalidade. |
 
-JSON ausente produz valores iniciais; JSON malformado ou com estrutura inesperada gera erro em vez de ser silenciosamente substituído. O armazenamento não tem criptografia, sincronização, migração de esquema nem recuperação automática de dados corrompidos.
+JSON ausente resulta em coleções ou mapas vazios. JSON malformado ou estrutura inesperada lança exceção em vez de substituir os dados silenciosamente. Não há criptografia, sincronização remota, migração de esquema ou recuperação automática de dados corrompidos.
 
-`Rental.toJson()` e `Rental.fromJson()` suportam PIN, número de série, checklist, caução, forma de pagamento e aceite dos termos. **A tela atual de Solicitação não coleta nem atribui esses campos**: eles permanecem nos valores padrão quando o usuário cria um aluguel pela interface. O teste de persistência preenche esses campos diretamente no modelo para verificar sua serialização; isso não comprova um fluxo de preenchimento na interface. A confirmação, o cancelamento e a limpeza do histórico persistem a lista de solicitações.
+`Rental.toJson()` e `Rental.fromJson()` serializam também PIN, número de série, checklist, caução, pagamento e aceite dos termos. Esses campos não são coletados pelo formulário atual e permanecem vazios ou nos valores padrão. O teste preenche-os diretamente no modelo para validar serialização.
 
-## 6. Solicitação de aluguel
+## 7. Solicitação de aluguel
 
-`RentalScreen` recebe o produto da rota, escolhe datas de início e término, modalidade, endereço de delivery e observações, calcula uma estimativa e pede confirmação. As datas são normalizadas para meia-noite; períodos inferiores a um dia são bloqueados. Produtos com tarifa semanal seriam rateados por dia, mas todos os produtos do catálogo atual têm tarifa diária.
+`RentalScreen` recebe o produto da rota, escolhe data inicial e final, modalidade retirada/delivery, endereço opcional de entrega e observações. Datas são normalizadas para meia-noite e períodos menores que um dia são bloqueados.
 
-A confirmação cria um `Rental` com datas, duração, estimativa, observações e dados de entrega e grava a lista local. A interface informa que não há cobrança real. A aba Meus Aluguéis ordena os registros do mais recente para o mais antigo, permite cancelar uma solicitação e mantém o estado vazio quando não há registros.
+A estimativa usa a tarifa do produto multiplicada pela duração. Se o produto estiver marcado com unidade semanal, o código divide a tarifa por sete para formar uma tarifa diária; o catálogo atual utiliza apenas tarifas diárias.
 
-## 7. Comentários e manutenção
+Ao confirmar, cria um `Rental` com datas, duração, total estimado, observações e dados de entrega, adiciona o registro à lista em memória e salva o JSON local. A interface informa que não há cobrança real. Meus Aluguéis permite cancelar ou limpar solicitações.
 
-A revisão percorreu os arquivos Dart de `lib/` e `test/widget_test.dart`. Foram retirados comentários que apenas repetiam nomes de campos, widgets ou ações evidentes; comentários mantidos ou acrescentados esclarecem decisões menos óbvias: restauração de sessão sem senha na sessão, validação local de CPF e limites de KYC, serialização de solicitações, filtros combinados, fallback do avatar, inicialização da Splash e paleta pastel.
+## 8. Técnicas de implementação e performance
 
-A revisão também corrigiu uma condição de corrida encontrada na inicialização: a Splash podia consultar o auto-login antes de terminar a restauração local. Agora ela aguarda a `Future` de inicialização apenas quando os dados ainda não estão prontos. Foi corrigida ainda a variante nativa Android `drawable-v21`, que não mostrava o ícone, e a configuração Android 12+, que mantinha o ícone transparente.
+As técnicas presentes no código são:
 
-## 8. Testes e validação
+- Widgets temáticos em `ThemeData` construídos uma vez e reutilizados.
+- `IndexedStack` para preservar telas da navegação por abas.
+- Filtros em listas locais com `where` e inferência de estilo por texto.
+- Inicialização assíncrona compartilhada pela Splash.
+- Controllers encerrados nos métodos `dispose`.
+- Verificação de `mounted` antes de `setState` ou navegação após operações assíncronas.
+- Serialização JSON direta em `SharedPreferences`.
 
-`test/widget_test.dart` inicializa `SharedPreferences` com valores simulados e limpa estado entre cenários. Os 15 testes cobrem:
+Não foram coletadas métricas de FPS, uso de memória/RAM ou cold start em profiler ou em dispositivo físico. Qualquer medição futura deve ser registrada com modelo do aparelho, versão do Android, modo de build e quantidade de execuções.
 
-1. Identidade e progresso da Splash e redirecionamento para Login.
-2. Espera da Splash pela restauração local antes da escolha de rota.
-3. Jornada de aluguel, persistência básica e cancelamento.
-4. Busca em viewport compacto.
-5. Filtros combinados de plataforma/estilo, legibilidade dos chips e limpeza.
-6. Exibição do e-mail no Perfil e logout.
-7. Alternância entre os temas.
-8. Cores do tema claro pastel.
-9. Histórico de abas e retorno dos detalhes.
-10. Edição do Perfil, preferências e limpeza do histórico.
-11. Validação de CPF e seleção/remoção de foto.
-12. Rejeição de credenciais incorretas.
-13. Cadastro, entrada e fallback do avatar pela inicial.
-14. Restauração de conta, perfil, preferências e campos de aluguel serializados.
-15. Auto-login após restauração e limpeza da sessão no logout.
+## 9. Testes
 
-Formatação: `dart format lib test` — 23 arquivos Dart verificados.
+`test/widget_test.dart` usa `SharedPreferences` com valores simulados e limpa estado entre cenários. O conjunto contém 16 casos: 14 testes de widget e 2 testes unitários.
 
-Validação executada:
+1. Permanência da Splash e seleção posterior da Login.
+2. Espera pela restauração local antes do roteamento.
+3. Recuperação após falha de inicialização e nova tentativa.
+4. Jornada completa de aluguel, persistência e cancelamento.
+5. Busca em viewport compacto.
+6. Filtros combinados de plataforma e estilo.
+7. E-mail no Perfil e logout.
+8. Alternância de temas.
+9. Cores e legibilidade dos temas claro/escuro.
+10. Voltar pelas abas e retorno dos detalhes.
+11. Edição do Perfil e limpeza do histórico.
+12. Validação de CPF e seleção/remoção de foto.
+13. Bloqueio de credenciais inválidas.
+14. Cadastro e abertura do Perfil com avatar por inicial.
+15. Restauração de conta, perfil, preferências e detalhes serializados do aluguel.
+16. Login lembrado, auto-login e limpeza da sessão no logout.
 
-```text
-Analyzing AlugaPlay...
-No issues found! (ran in 2.3s)
-00:00 +0: loading C:/Users/anton/OneDrive/Documentos/Estudos/FACULDADE/Flutter/AlugaPlay/test/widget_test.dart
-00:00 +0: Splash screen navigates to login after its display interval
-00:01 +1: Splash waits for local restoration before selecting a route
-00:01 +2: customer can rent a selected catalog product end to end
-00:03 +3: home search filters products on a compact screen without overflow
-00:04 +4: quick filters combine platform and game style and can clear
-00:05 +5: login email appears in profile and sign out returns to login
-00:06 +6: user can switch between light and dark themes
-00:07 +7: light theme uses soft surfaces and readable text colors
-00:07 +8: system back follows tab history and pops product details
-00:08 +9: profile edits player settings and clears rental history
-00:09 +10: profile validates CPF and allows selecting and removing photo
-00:10 +11: local login blocks accounts that do not authenticate
-00:10 +12: new account registers and opens the authenticated profile
-00:11 +13: local storage restores account, preferences, and rental details
-00:11 +14: remembered login restores home and logout clears the session
-00:12 +15: All tests passed!
+Nenhum teste comunica-se com servidor externo.
+
+## 10. Validação e limitações
+
+Comandos previstos para a validação final:
+
+```bash
+dart format lib test
+flutter analyze && flutter test --no-pub
 ```
 
-Não foi executado build Android nem validação em dispositivo físico/emulador.
+Não é correto afirmar build Android validado, execução em emulador ou dispositivo físico, instalação do APK, métricas de desempenho ou integração externa sem executar esses testes.
 
-## 9. Membros do Projeto
+### Métricas pendentes de medição real
+
+- FPS médio/pico: **não medido**
+- Uso de RAM: **não medido**
+- Cold start: **não medido**
+- Tempo de warm start: **não medido**
+- Tempo de restauração local: **não medido**
+
+## 11. Membros do Projeto
 
 - Antonio Moura da Costa Filho
 - Enzo de Melo Cordeiro

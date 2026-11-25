@@ -48,7 +48,7 @@ class Rental {
   final String deliveryMethod;
   final String deliveryAddress;
 
-  /// Serializa PIN, número de série, checklist, caução, pagamento e aceite.
+  /// Converte o modelo completo para JSON; os campos avançados não têm captura na UI atual.
   Map<String, dynamic> toJson() => {
     'id': id,
     'productId': product.id,

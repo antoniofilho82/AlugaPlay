@@ -37,7 +37,7 @@ class CategoryItem extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: isSelected
-                  ? AppTheme.emeraldAccent.withValues(alpha: 0.55)
+                  ? colorScheme.tertiary.withValues(alpha: 0.85)
                   : colorScheme.outlineVariant,
             ),
           ),

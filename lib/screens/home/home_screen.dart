@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:material_ui/material_ui.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../components/alugaplay_logo.dart';
 import '../../components/category_item.dart';
 import '../../components/product_card.dart';
 import '../../components/primary_button.dart';
@@ -28,6 +29,10 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   Color get _background => Theme.of(context).scaffoldBackgroundColor;
   Color get _surface => Theme.of(context).colorScheme.surface;
+  Color get _iconTileBackground =>
+      Theme.of(context).brightness == Brightness.light
+      ? Theme.of(context).colorScheme.surfaceContainerHighest
+      : _background;
   Color get _accent => Theme.of(context).colorScheme.secondary;
   Color get _textPrimary => Theme.of(context).colorScheme.onSurface;
 
@@ -96,6 +101,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    // Evita manter o TextEditingController após a remoção da tela.
     _searchController.dispose();
     super.dispose();
   }
@@ -193,7 +199,7 @@ class _HomeScreenState extends State<HomeScreen> {
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
-      backgroundColor: const Color(0xFF101A14),
+      backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -280,13 +286,14 @@ class _HomeScreenState extends State<HomeScreen> {
     required String keyPrefix,
     required ValueChanged<String> onSelected,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           title,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: colorScheme.onSurface,
             fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
@@ -301,17 +308,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 key: ValueKey('$keyPrefix-$option'),
                 label: Text(option),
                 selected: selected == option,
-                backgroundColor: const Color(0xFF14241B),
-                selectedColor: const Color(0xFF16A34A),
+                backgroundColor: colorScheme.surfaceContainerHighest,
+                selectedColor: colorScheme.primary,
                 side: BorderSide(
                   color: selected == option
-                      ? const Color(0xFF22C55E)
-                      : const Color(0xFF2C4A39),
+                      ? colorScheme.primary
+                      : colorScheme.outlineVariant,
                 ),
                 labelStyle: TextStyle(
                   color: selected == option
-                      ? Colors.white
-                      : const Color(0xFFECF5EF),
+                      ? colorScheme.onPrimary
+                      : colorScheme.onSurface,
                   fontWeight: selected == option
                       ? FontWeight.w600
                       : FontWeight.w500,
@@ -393,7 +400,7 @@ class _HomeScreenState extends State<HomeScreen> {
             gradient: LinearGradient(
               colors: [
                 Color.alphaBlend(
-                  AppTheme.emeraldAccent.withValues(alpha: 0.07),
+                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.06),
                   _surface,
                 ),
                 _surface,
@@ -403,7 +410,8 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             border: Border(
               top: BorderSide(
-                color: AppTheme.emeraldAccent.withValues(alpha: 0.18),
+                color: Theme.of(context).colorScheme.primary
+                    .withValues(alpha: 0.16),
               ),
             ),
           ),
@@ -420,7 +428,7 @@ class _HomeScreenState extends State<HomeScreen> {
               }
             },
             backgroundColor: Colors.transparent,
-            indicatorColor: Theme.of(context).colorScheme.primaryContainer,
+            indicatorColor: Colors.transparent,
             destinations: const [
               NavigationDestination(
                 icon: Icon(Icons.home_outlined),
@@ -434,7 +442,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               NavigationDestination(
                 icon: Icon(Icons.receipt_long_outlined),
-                selectedIcon: Icon(Icons.receipt_long_rounded),
+                selectedIcon: Icon(Icons.receipt_long),
                 label: 'Meus aluguéis',
               ),
               NavigationDestination(
@@ -572,45 +580,12 @@ class _HomeScreenState extends State<HomeScreen> {
     return Row(
       children: [
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              RichText(
-                text: TextSpan(
-                  style: TextStyle(
-                    fontSize: 23,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.2,
-                  ),
-                  children: [
-                    TextSpan(
-                      text: 'Aluga',
-                      style: TextStyle(color: _textPrimary),
-                    ),
-                    TextSpan(
-                      text: 'Play',
-                      style: TextStyle(color: _accent),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                'Olá, Jogador!',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  color: _textPrimary,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Sua próxima aventura começa aqui.',
-                style: TextStyle(
-                  color: _textPrimary.withValues(alpha: 0.68),
-                  fontSize: 14,
-                ),
-              ),
-            ],
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: const AlugaPlayWordmark(
+              fontSize: 24,
+              alignment: Alignment.centerLeft,
+            ),
           ),
         ),
         const SizedBox(width: 8),
@@ -709,7 +684,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: IconButton.styleFrom(
                   foregroundColor: _hasQuickFilters ? Colors.white : _accent,
                   backgroundColor: _hasQuickFilters
-                      ? AppTheme.emerald
+                      ? AppTheme.blue
                       : Colors.transparent,
                 ),
                 icon: const Icon(Icons.filter_alt_rounded),
@@ -729,18 +704,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       vertical: 7,
                     ),
                     decoration: BoxDecoration(
-                      color: AppTheme.emerald.withValues(alpha: 0.12),
+                      color: _accent.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: AppTheme.emeraldAccent.withValues(alpha: 0.3),
-                      ),
+                      border: Border.all(color: _accent.withValues(alpha: 0.3)),
                     ),
                     child: Text(
                       _quickFilterSummary,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: AppTheme.emeraldAccent,
+                        color: _accent,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
@@ -750,7 +723,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 TextButton(
                   onPressed: _clearFilters,
                   style: TextButton.styleFrom(
-                    foregroundColor: AppTheme.emeraldAccent,
+                    foregroundColor: _accent,
                     minimumSize: Size.zero,
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                   ),
@@ -790,7 +763,7 @@ class _HomeScreenState extends State<HomeScreen> {
         gradient: AppTheme.heroBannerGradient(brightness),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: AppTheme.emeraldAccent.withValues(alpha: 0.55),
+          color: AppTheme.blueAccent.withValues(alpha: 0.55),
           width: 1.2,
         ),
       ),
@@ -1081,7 +1054,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: _background,
+                  color: _iconTileBackground,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(rental.product.icon, color: _accent),
@@ -1257,9 +1230,7 @@ class _HomeScreenState extends State<HomeScreen> {
       alignment: Alignment.center,
       decoration: const BoxDecoration(
         shape: BoxShape.circle,
-        gradient: LinearGradient(
-          colors: [AppTheme.emeraldAccent, AppTheme.emerald],
-        ),
+        gradient: LinearGradient(colors: [AppTheme.blueAccent, AppTheme.blue]),
       ),
       child: Text(
         initial,
@@ -1297,7 +1268,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color: AppTheme.emeraldAccent.withValues(alpha: 0.28),
+                  color: AppTheme.blueAccent.withValues(alpha: 0.28),
                 ),
               ),
               child: Row(
@@ -1336,7 +1307,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   TextButton(
                     onPressed: _editPlayerDetails,
                     style: TextButton.styleFrom(
-                      foregroundColor: AppTheme.emerald,
+                      foregroundColor: AppTheme.blue,
                       minimumSize: Size.zero,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 10,
@@ -1362,7 +1333,7 @@ class _HomeScreenState extends State<HomeScreen> {
               trailing: Switch(
                 key: const ValueKey('profile-dark-mode'),
                 value: Theme.of(context).brightness == Brightness.dark,
-                activeThumbColor: AppTheme.emerald,
+                activeThumbColor: AppTheme.blue,
                 onChanged: (value) =>
                     _setThemeMode(value ? ThemeMode.dark : ThemeMode.light),
               ),
@@ -1380,7 +1351,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 value:
                     UserProfile.notifyReturnReminder &&
                     UserProfile.notifyNewReleases,
-                activeThumbColor: AppTheme.emerald,
+                activeThumbColor: AppTheme.blue,
                 onChanged: _setNotificationsEnabled,
               ),
             ),
@@ -1479,7 +1450,7 @@ class _HomeScreenState extends State<HomeScreen> {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: AppTheme.emeraldAccent.withValues(alpha: 0.16),
+              color: AppTheme.blueAccent.withValues(alpha: 0.16),
             ),
           ),
           child: Row(
@@ -1488,7 +1459,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: AppTheme.emeraldAccent.withValues(alpha: 0.1),
+                  color: AppTheme.blueAccent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, color: _accent, size: 20),
@@ -1601,7 +1572,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ListTile(
                   title: Text(option),
                   trailing: selected == option
-                      ? const Icon(Icons.check_rounded, color: AppTheme.emerald)
+                      ? const Icon(Icons.check_rounded, color: AppTheme.blue)
                       : null,
                   onTap: () => Navigator.pop(sheetContext, option),
                 ),
@@ -2064,7 +2035,7 @@ class _HomeScreenState extends State<HomeScreen> {
             gradient: LinearGradient(
               colors: [
                 Color.alphaBlend(
-                  AppTheme.emeraldAccent.withValues(alpha: 0.07),
+                  AppTheme.blueAccent.withValues(alpha: 0.07),
                   _surface,
                 ),
                 _surface,
@@ -2081,7 +2052,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 width: 54,
                 height: 54,
                 decoration: BoxDecoration(
-                  color: _background,
+                  color: _iconTileBackground,
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(icon, color: _accent, size: 28),

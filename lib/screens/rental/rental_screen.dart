@@ -47,6 +47,7 @@ class _RentalScreenState extends State<RentalScreen> {
 
   @override
   void dispose() {
+    // Libera os campos de texto quando a tela de locação sai da árvore.
     _notesController.dispose();
     _deliveryAddressController.dispose();
     super.dispose();
@@ -456,14 +457,14 @@ class _RentalScreenState extends State<RentalScreen> {
       label: Text(label),
       selected: selected,
       onSelected: (_) => _setRentalDuration(days),
-      selectedColor: AppTheme.emeraldAccent.withValues(alpha: 0.22),
+      selectedColor: AppTheme.blueAccent.withValues(alpha: 0.22),
       side: BorderSide(
         color: selected
-            ? AppTheme.emerald
+            ? AppTheme.blue
             : Theme.of(context).colorScheme.outlineVariant,
       ),
       labelStyle: TextStyle(
-        color: selected ? AppTheme.emeraldDeep : _textPrimary,
+        color: selected ? AppTheme.blueDeep : _textPrimary,
         fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
       ),
     );
@@ -484,14 +485,14 @@ class _RentalScreenState extends State<RentalScreen> {
               : profile.city;
         }
       }),
-      selectedColor: AppTheme.emeraldAccent.withValues(alpha: 0.22),
+      selectedColor: AppTheme.blueAccent.withValues(alpha: 0.22),
       side: BorderSide(
         color: selected
-            ? AppTheme.emerald
+            ? AppTheme.blue
             : Theme.of(context).colorScheme.outlineVariant,
       ),
       labelStyle: TextStyle(
-        color: selected ? AppTheme.emeraldDeep : _textPrimary,
+        color: selected ? AppTheme.blueDeep : _textPrimary,
         fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
       ),
     );
@@ -503,14 +504,12 @@ class _RentalScreenState extends State<RentalScreen> {
       decoration: BoxDecoration(
         gradient: AppTheme.heroBannerGradient(Theme.of(context).brightness),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppTheme.emeraldAccent.withValues(alpha: 0.38),
-        ),
+        border: Border.all(color: AppTheme.blueAccent.withValues(alpha: 0.38)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.verified_user_outlined, color: AppTheme.emerald),
+          const Icon(Icons.verified_user_outlined, color: AppTheme.blue),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

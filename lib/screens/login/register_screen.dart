@@ -81,7 +81,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: AppTheme.emeraldAccent.withValues(alpha: 0.3),
+                    color: AppTheme.blueAccent.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Form(

@@ -28,7 +28,10 @@ class PrimaryButton extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: AppTheme.primaryGradient,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.32)),
+          border: Border.all(
+            color: AppTheme.gold.withValues(alpha: 0.72),
+            width: 1.2,
+          ),
         ),
         child: ElevatedButton(
           onPressed: onPressed,

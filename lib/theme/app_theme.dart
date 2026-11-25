@@ -1,6 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
-/// Centraliza o tema escuro grafite e o tema claro pastel do AlugaPlay.
+/// Centraliza os temas azul-noturno e azul-claro suave do AlugaPlay.
 class AppTheme {
   AppTheme._();
 
@@ -8,16 +8,18 @@ class AppTheme {
   static final ValueNotifier<ThemeMode> themeModeNotifier =
       ValueNotifier<ThemeMode>(ThemeMode.system);
 
-  /// Verde de referência para componentes e estados destacados.
-  static const Color emerald = Color(0xFF16A34A);
+  /// Azul principal e tons de apoio da identidade visual.
+  static const Color blue = Color(0xFF2563EB);
+  static const Color blueAccent = Color(0xFF38BDF8);
+  static const Color blueDeep = Color(0xFF1D4ED8);
 
-  /// Tons secundários de esmeralda usados em acentos e estados sutis.
-  static const Color emeraldAccent = Color(0xFF22C55E);
-  static const Color emeraldDeep = Color(0xFF059669);
+  /// Amarelo de destaque usado em detalhes sem comprometer a leitura.
+  static const Color gold = Color(0xFFFACC15);
+  static const Color goldAmber = Color(0xFFA16207);
 
   /// Degradê principal compartilhado por ações e estados selecionados.
   static const LinearGradient primaryGradient = LinearGradient(
-    colors: [Color(0xFF22C55E), Color(0xFF16A34A), Color(0xFF059669)],
+    colors: [Color(0xFF2563EB), Color(0xFF1D4ED8), Color(0xFF0EA5E9)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -27,8 +29,8 @@ class AppTheme {
     final isDark = brightness == Brightness.dark;
     return LinearGradient(
       colors: isDark
-          ? const [Color(0xFF123521), Color(0xFF10291E), Color(0xFF181B20)]
-          : const [Color(0xFFD7E7DD), Color(0xFFE5EFE8), Color(0xFFEEF4F0)],
+          ? const [Color(0xFF16264A), Color(0xFF0A1224), Color(0xFF101B36)]
+          : const [Color(0xFFEFF6FF), Color(0xFFF8FAFC), Color(0xFFFFFFFF)],
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     );
@@ -42,13 +44,13 @@ class AppTheme {
       radius: 1.15,
       colors: isDark
           ? [
-              emeraldAccent.withValues(alpha: 0.2),
-              emeraldDeep.withValues(alpha: 0.08),
+              blueAccent.withValues(alpha: 0.2),
+              blueDeep.withValues(alpha: 0.08),
               Colors.transparent,
             ]
           : [
-              const Color(0xFF389E68).withValues(alpha: 0.14),
-              const Color(0xFF2E8B57).withValues(alpha: 0.05),
+              const Color(0xFF38BDF8).withValues(alpha: 0.1),
+              const Color(0xFF2563EB).withValues(alpha: 0.035),
               Colors.transparent,
             ],
       stops: const [0, 0.48, 1],
@@ -70,28 +72,28 @@ class AppTheme {
   static final ThemeData darkTheme = _buildDarkTheme();
   static final ThemeData lightTheme = _buildLightTheme();
 
-  /// Monta o esquema escuro com superfícies grafite e acentos esmeralda.
+  /// Monta o esquema escuro com superfícies azul-noturno.
   static ThemeData _buildDarkTheme() => _buildTheme(
     brightness: Brightness.dark,
-    background: const Color(0xFF0F1115),
-    surface: const Color(0xFF181B20),
-    surfaceContainer: const Color(0xFF22262E),
-    outline: const Color(0xFF2E3440),
+    background: const Color(0xFF050811),
+    surface: const Color(0xFF0A1224),
+    surfaceContainer: const Color(0xFF101B36),
+    outline: const Color(0xFF263654),
     foreground: const Color(0xFFF8FAFC),
-    foregroundVariant: const Color(0xFF94A3B8),
+    foregroundVariant: const Color(0xFFAAB8CE),
   );
 
-  /// Usa superfícies verde-acinzentadas e acentos esmeralda de menor brilho.
+  /// Usa superfícies azuladas suaves e texto escuro de alto contraste.
   static ThemeData _buildLightTheme() => _buildTheme(
     brightness: Brightness.light,
-    background: const Color(0xFFE3ECE6),
-    surface: const Color(0xFFE3ECE6),
-    surfaceContainer: const Color(0xFFEEF4F0),
-    outline: const Color(0xFFC8D8CE),
-    foreground: const Color(0xFF233029),
-    foregroundVariant: const Color(0xFF52645A),
-    primary: const Color(0xFF2E8B57),
-    secondary: const Color(0xFF389E68),
+    background: const Color(0xFFF8FAFC),
+    surface: const Color(0xFFFFFFFF),
+    surfaceContainer: const Color(0xFFEFF6FF),
+    outline: const Color(0xFFCBD5E1),
+    foreground: const Color(0xFF0F172A),
+    foregroundVariant: const Color(0xFF334155),
+    primary: blueDeep,
+    secondary: blueDeep,
   );
 
   static ThemeData _buildTheme({
@@ -106,15 +108,15 @@ class AppTheme {
     Color? secondary,
   }) {
     final isDark = brightness == Brightness.dark;
-    final primaryColor = primary ?? emerald;
-    final secondaryColor = secondary ?? (isDark ? emeraldAccent : emeraldDeep);
+    final primaryColor = primary ?? blue;
+    final secondaryColor = secondary ?? (isDark ? gold : goldAmber);
     final colorScheme =
         (isDark
                 ? ColorScheme.dark(
                     primary: primaryColor,
                     onPrimary: const Color(0xFFFFFFFF),
                     secondary: secondaryColor,
-                    onSecondary: const Color(0xFF052E1B),
+                    onSecondary: const Color(0xFF050811),
                     surface: surface,
                     onSurface: foreground,
                     error: const Color(0xFFDC2626),
@@ -124,7 +126,7 @@ class AppTheme {
                     primary: primaryColor,
                     onPrimary: const Color(0xFFFFFFFF),
                     secondary: secondaryColor,
-                    onSecondary: const Color(0xFFFFFFFF),
+                    onSecondary: const Color(0xFF050811),
                     surface: surface,
                     onSurface: foreground,
                     error: const Color(0xFFB91C1C),
@@ -132,13 +134,17 @@ class AppTheme {
                   ))
             .copyWith(
               primaryContainer: isDark
-                  ? const Color(0xFF123521)
-                  : const Color(0xFFD7E7DD),
-              onPrimaryContainer: isDark ? const Color(0xFFD1FAE5) : foreground,
-              secondaryContainer: surfaceContainer,
-              onSecondaryContainer: foreground,
-              tertiary: isDark ? emeraldDeep : secondaryColor,
-              onTertiary: const Color(0xFFFFFFFF),
+                  ? const Color(0xFF101B36)
+                  : const Color(0xFFEFF6FF),
+              onPrimaryContainer: foreground,
+              secondaryContainer: isDark
+                  ? const Color(0xFF332B10)
+                  : const Color(0xFFDBEAFE),
+              onSecondaryContainer: isDark
+                  ? const Color(0xFFFDE68A)
+                  : const Color(0xFF1E3A8A),
+              tertiary: secondaryColor,
+              onTertiary: const Color(0xFF0A1224),
               surfaceDim: background,
               surfaceBright: surface,
               surfaceContainerLowest: background,
@@ -153,8 +159,8 @@ class AppTheme {
               scrim: const Color(0xFF000000),
               inverseSurface: foreground,
               onInverseSurface: background,
-              inversePrimary: emeraldAccent,
-              surfaceTint: emerald,
+              inversePrimary: blueAccent,
+              surfaceTint: blue,
             );
 
     return ThemeData(
@@ -245,7 +251,7 @@ class AppTheme {
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMedium),
           borderSide: BorderSide(
-            color: isDark ? emeraldAccent : colorScheme.primary,
+            color: isDark ? blueAccent : colorScheme.primary,
             width: 1.5,
           ),
         ),
@@ -255,8 +261,8 @@ class AppTheme {
         ),
       ),
       cardTheme: CardThemeData(
-        color: isDark ? surface : surfaceContainer,
-        surfaceTintColor: isDark ? surface : surfaceContainer,
+        color: surface,
+        surfaceTintColor: surface,
         shadowColor: background,
         elevation: 0,
         shape: RoundedRectangleBorder(
@@ -288,19 +294,19 @@ class AppTheme {
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: surface,
         elevation: 0,
-        indicatorColor: isDark
-            ? const Color(0xFF123521)
-            : const Color(0xFFD7E7DD),
+        indicatorColor: Colors.transparent,
         iconTheme: WidgetStateProperty.resolveWith<IconThemeData?>(
           (states) => IconThemeData(
-            color: states.contains(WidgetState.selected)
-                ? colorScheme.primary
+            color: isDark || states.contains(WidgetState.selected)
+                ? colorScheme.secondary
                 : foregroundVariant,
           ),
         ),
         labelTextStyle: WidgetStateProperty.resolveWith<TextStyle?>(
           (states) => TextStyle(
-            color: states.contains(WidgetState.selected)
+            color: isDark
+                ? colorScheme.secondary
+                : states.contains(WidgetState.selected)
                 ? colorScheme.primary
                 : foregroundVariant,
           ),

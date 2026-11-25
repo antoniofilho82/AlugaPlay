@@ -21,6 +21,7 @@ class _LoginScreenState extends State<LoginScreen> {
   late final TextEditingController _passwordController;
   bool _rememberAccess = LocalAuthService.rememberAccess;
   bool _obscurePassword = true;
+  bool _registerPressed = false;
   String? _errorMessage;
 
   Color get _textPrimary => Theme.of(context).colorScheme.onSurface;
@@ -113,25 +114,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     children: [
                       Center(child: const AlugaPlayLogo(size: 84)),
                       const SizedBox(height: 18),
-                      Center(
-                        child: RichText(
-                          text: TextSpan(
-                            style: TextStyle(
-                              fontSize: 30,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.4,
-                            ),
-                            children: [
-                              TextSpan(
-                                text: 'Aluga',
-                                style: TextStyle(color: _textPrimary),
-                              ),
-                              const TextSpan(
-                                text: 'Play',
-                                style: TextStyle(color: AppTheme.emerald),
-                              ),
-                            ],
-                          ),
+                      const Center(
+                        child: AlugaPlayWordmark(
+                          fontSize: 30,
+                          letterSpacing: 0.4,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -153,9 +139,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           borderRadius: BorderRadius.circular(18),
                           border: Border.all(
-                            color: AppTheme.emeraldAccent.withValues(
-                              alpha: 0.25,
-                            ),
+                            color: AppTheme.blueAccent.withValues(alpha: 0.25),
                           ),
                         ),
                         child: Form(
@@ -232,7 +216,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     children: [
                                       Checkbox(
                                         value: _rememberAccess,
-                                        activeColor: AppTheme.emerald,
+                                        activeColor: AppTheme.blue,
                                         onChanged: (value) => setState(
                                           () =>
                                               _rememberAccess = value ?? false,
@@ -247,7 +231,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                           child: const Text(
                                             'Lembrar meu acesso',
                                             style: TextStyle(
-                                              color: AppTheme.emerald,
+                                              color: AppTheme.blue,
                                               fontSize: 12,
                                               fontWeight: FontWeight.w600,
                                             ),
@@ -259,7 +243,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   final forgotPassword = TextButton(
                                     onPressed: _openForgotPassword,
                                     style: TextButton.styleFrom(
-                                      foregroundColor: AppTheme.emerald,
+                                      foregroundColor: AppTheme.blue,
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 4,
                                       ),
@@ -347,27 +331,66 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 12),
                       Center(
-                        child: Wrap(
-                          alignment: WrapAlignment.center,
-                          children: [
-                            Text(
-                              'Não tem conta? ',
-                              style: TextStyle(color: colors.onSurfaceVariant),
-                            ),
-                            Semantics(
-                              link: true,
-                              child: GestureDetector(
-                                onTap: _openRegister,
-                                child: Text(
-                                  'Criar nova conta',
-                                  style: const TextStyle(
-                                    color: AppTheme.emeraldAccent,
-                                    fontWeight: FontWeight.w700,
+                        child: FittedBox(
+                          key: const ValueKey('register-footer-line'),
+                          fit: BoxFit.scaleDown,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Não tem conta? ',
+                                style: TextStyle(
+                                  color: colors.onSurfaceVariant,
+                                ),
+                              ),
+                              Semantics(
+                                link: true,
+                                child: Material(
+                                  color: _registerPressed
+                                      ? AppTheme.gold.withValues(alpha: 0.16)
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: InkWell(
+                                    key: const ValueKey(
+                                      'register-account-link',
+                                    ),
+                                    onTap: _openRegister,
+                                    onHighlightChanged: (highlighted) {
+                                      setState(
+                                        () => _registerPressed = highlighted,
+                                      );
+                                    },
+                                    splashColor: AppTheme.blueAccent.withValues(
+                                      alpha: 0.28,
+                                    ),
+                                    highlightColor: AppTheme.gold.withValues(
+                                      alpha: 0.22,
+                                    ),
+                                    hoverColor: AppTheme.blue.withValues(
+                                      alpha: 0.12,
+                                    ),
+                                    mouseCursor: SystemMouseCursors.click,
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 4,
+                                      ),
+                                      child: Text(
+                                        'Criar nova conta',
+                                        style: TextStyle(
+                                          color: _registerPressed
+                                              ? AppTheme.gold
+                                              : AppTheme.blueAccent,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ],

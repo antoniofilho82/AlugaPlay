@@ -68,10 +68,10 @@ flutter:
 
 flutter_launcher_icons:
   android: "ic_launcher"
-  image_path: "assets/icon/app_icon.jpeg"
-  adaptive_icon_background: "#060D09"
-  adaptive_icon_foreground: "assets/icon/app_icon.jpeg"
-  adaptive_icon_foreground_inset: 0
+  image_path: "assets/icon/app_icon.png"
+  adaptive_icon_background: "#050811"
+  adaptive_icon_foreground: "assets/icon/app_icon.png"
+  adaptive_icon_foreground_inset: 18
   min_sdk_android: 21
 
   # An image asset can refer to one or more resolution-specific "variants", see

@@ -71,7 +71,7 @@ class UserProfile {
     accountBadge: 'Conta Gamer Demonstrativa',
   );
 
-  /// Snapshot ativo em memória; o serviço de autenticação também o persiste.
+  /// Snapshot ativo em memória, gravado pelo serviço de autenticação no armazenamento local.
   static UserProfile currentUser = defaultProfile;
 
   /// Preferências em memória, serializadas pelo serviço de autenticação.

@@ -2,12 +2,16 @@ import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:alugaplay/app/app.dart';
+import 'package:alugaplay/components/alugaplay_logo.dart';
+import 'package:alugaplay/components/product_card.dart';
 import 'package:alugaplay/data/mock_products.dart';
 import 'package:alugaplay/models/rental.dart';
 import 'package:alugaplay/models/user_profile.dart';
+import 'package:alugaplay/routes/app_routes.dart';
 import 'package:alugaplay/screens/home/home_screen.dart';
 import 'package:alugaplay/screens/login/forgot_password_screen.dart';
 import 'package:alugaplay/screens/login/login_screen.dart';
@@ -35,11 +39,47 @@ Future<void> _signIn(
   await tester.pumpAndSettle();
 }
 
+void _expectAlugaPlayWordmark(WidgetTester tester) {
+  expect(find.byType(AlugaPlayWordmark), findsOneWidget);
+  final brightness = Theme.of(tester.element(find.byType(AlugaPlayWordmark)))
+      .brightness;
+  final isLight = brightness == Brightness.light;
+  final fill = tester.widget<RichText>(
+    find.byKey(const ValueKey('alugaplay-wordmark-fill')),
+  );
+  final fillParts = (fill.text as TextSpan).children!;
+  expect((fillParts[0] as TextSpan).style?.color, AppTheme.gold);
+  expect((fillParts[1] as TextSpan).style?.color, const Color(0xFFF8FAFC));
+
+  final outline = tester.widget<RichText>(
+    find.byKey(const ValueKey('alugaplay-wordmark-outline')),
+  );
+  final outlineStyle = (outline.text as TextSpan).style!;
+  expect(outlineStyle.foreground?.style, PaintingStyle.stroke);
+  final titleFontSize = outlineStyle.fontSize!;
+  expect(
+    outlineStyle.foreground?.color.toARGB32(),
+    isLight ? 0xFF1E3A8A : 0xFF050811,
+  );
+  expect(
+    outlineStyle.foreground?.strokeWidth,
+    closeTo(titleFontSize * (isLight ? 0.055 : 0.08), 0.001),
+  );
+  expect(
+    outlineStyle.shadows?.any(
+      (shadow) =>
+          shadow.color == AppTheme.blue.withValues(alpha: isLight ? 0.58 : 0.9),
+    ),
+    isTrue,
+  );
+}
+
 void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     StartupService.isReady = true;
     StartupService.initialization = Future<void>.value();
+    StartupService.error = null;
     await LocalStorageService.init();
     AppTheme.themeModeNotifier.value = ThemeMode.system;
     Rental.localRequests.clear();
@@ -57,80 +97,80 @@ void main() {
   tearDown(() async {
     StartupService.isReady = true;
     StartupService.initialization = Future<void>.value();
+    StartupService.error = null;
     AppTheme.themeModeNotifier.value = ThemeMode.system;
     Rental.localRequests.clear();
     await LocalAuthService.clearAllForTest();
   });
 
-  testWidgets('Splash screen navigates to login after its display interval', (
+  testWidgets('Splash stays visible before routing to login', (
     WidgetTester tester,
   ) async {
+    final startup = Completer<void>();
+    StartupService.isReady = false;
+    StartupService.initialization = startup.future;
     await tester.pumpWidget(const AlugaPlayApp());
 
+    final splashAsset = await rootBundle.load(
+      'assets/images/splash_screen.png',
+    );
+    expect(splashAsset.lengthInBytes, greaterThan(0));
     expect(find.bySemanticsLabel('AlugaPlay'), findsOneWidget);
     expect(
-      find.image(const AssetImage('assets/images/splash_bg.jpeg')),
-      findsNothing,
+      find.image(const AssetImage('assets/images/splash_screen.png')),
+      findsOneWidget,
     );
-    expect(find.byIcon(Icons.sports_esports_rounded), findsOneWidget);
-    final brandTitle = find.byWidgetPredicate(
-      (widget) =>
-          widget is RichText && widget.text.toPlainText() == 'AlugaPlay',
-    );
-    expect(brandTitle, findsOneWidget);
-    expect(find.text('Consoles, jogos e pacotes'), findsOneWidget);
-    expect(find.byType(LinearProgressIndicator), findsOneWidget);
-    final progressPosition = tester.widget<Positioned>(
-      find.ancestor(
-        of: find.byType(LinearProgressIndicator),
-        matching: find.byType(Positioned),
-      ),
-    );
-    expect(progressPosition.bottom, 44);
+    expect(find.byType(AlugaPlayWordmark), findsNothing);
     expect(
-      tester.getSize(find.byKey(const ValueKey('splash-progress-container'))),
-      const Size(172, 5),
+      tester.widget<MaterialApp>(find.byType(MaterialApp)).initialRoute,
+      AppRoutes.splash,
     );
-    final progressBar = tester.widget<LinearProgressIndicator>(
-      find.byKey(const ValueKey('splash-progress')),
+    final splashImage = tester.widget<Image>(
+      find.image(const AssetImage('assets/images/splash_screen.png')),
     );
-    expect(progressBar.minHeight, 5);
-    expect(progressBar.backgroundColor, Colors.transparent);
+    expect(splashImage.fit, BoxFit.cover);
+    expect(splashImage.filterQuality, FilterQuality.high);
+    final splashImageSize = tester.getSize(
+      find.image(const AssetImage('assets/images/splash_screen.png')),
+    );
+    expect(splashImageSize.width, greaterThan(0));
+    expect(splashImageSize.height, greaterThan(0));
     expect(
-      tester
-          .widget<ColoredBox>(
-            find.byKey(const ValueKey('splash-progress-track')),
-          )
-          .color,
-      const Color(0xFF1A2E23),
+      tester.widget<Scaffold>(find.byType(Scaffold).first).backgroundColor,
+      const Color(0xFF000000),
     );
-    expect(progressBar.value, 0);
-    await tester.pump(const Duration(milliseconds: 16));
-    await tester.pump(const Duration(milliseconds: 16));
-    await tester.pump(const Duration(milliseconds: 400));
-    final progress = tester
-        .widget<LinearProgressIndicator>(
-          find.byKey(const ValueKey('splash-progress')),
-        )
-        .value!;
-    expect(progress, greaterThan(0));
-    expect(progress, lessThan(1));
-    expect(find.bySemanticsLabel('AlugaPlay'), findsOneWidget);
+    expect(find.byKey(const ValueKey('splash-progress')), findsOneWidget);
+    expect(find.text('Consoles, jogos e pacotes'), findsNothing);
+    expect(find.text('Entrar na plataforma'), findsNothing);
 
-    await tester.pump(const Duration(milliseconds: 1050));
-    expect(
-      tester
-          .widget<LinearProgressIndicator>(
-            find.byKey(const ValueKey('splash-progress')),
-          )
-          .value,
-      1,
-    );
     await tester.pump(const Duration(milliseconds: 300));
-    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('AlugaPlay'), findsOneWidget);
+    expect(find.byType(LoginScreen), findsNothing);
 
+    startup.complete();
+    await tester.pump(const Duration(milliseconds: 2400));
+    expect(find.bySemanticsLabel('AlugaPlay'), findsOneWidget);
+    expect(find.byType(LoginScreen), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pumpAndSettle();
     expect(find.text('Entrar na plataforma'), findsOneWidget);
     expect(find.text('Entrar'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    StartupService.isReady = true;
+    StartupService.initialization = Future<void>.value();
+    await tester.pumpWidget(const AlugaPlayApp());
+    expect(find.bySemanticsLabel('AlugaPlay'), findsOneWidget);
+    expect(find.byType(LoginScreen), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.bySemanticsLabel('AlugaPlay'), findsOneWidget);
+    expect(find.byType(LoginScreen), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pumpAndSettle();
+    expect(find.byType(LoginScreen), findsOneWidget);
   });
 
   testWidgets('Splash waits for local restoration before selecting a route', (
@@ -156,6 +196,40 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(HomeScreen), findsOneWidget);
     expect(find.byType(LoginScreen), findsNothing);
+  });
+
+  testWidgets('Splash reports startup failure and retries restoration', (
+    WidgetTester tester,
+  ) async {
+    final previousErrorHandler = FlutterError.onError;
+    FlutterError.onError = (_) {};
+    var attempts = 0;
+    StartupService.initialize(() async {
+      attempts++;
+      if (attempts == 1) throw StateError('Local data could not be restored');
+    });
+
+    try {
+      await tester.pumpWidget(const AlugaPlayApp());
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Não foi possível restaurar os dados locais.'),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('splash-retry')), findsOneWidget);
+      expect(find.byType(LoginScreen), findsNothing);
+      expect(StartupService.isReady, isFalse);
+
+      await tester.tap(find.byKey(const ValueKey('splash-retry')));
+      await tester.pumpAndSettle();
+
+      expect(attempts, 2);
+      expect(find.byType(LoginScreen), findsOneWidget);
+      expect(StartupService.isReady, isTrue);
+    } finally {
+      FlutterError.onError = previousErrorHandler;
+    }
   });
 
   testWidgets('customer can rent a selected catalog product end to end', (
@@ -234,6 +308,7 @@ void main() {
 
     await tester.tap(find.text('Meus aluguéis'));
     await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.receipt_long), findsOneWidget);
     expect(find.text(productName), findsOneWidget);
     expect(find.text('1 solicitação'), findsOneWidget);
 
@@ -256,6 +331,19 @@ void main() {
       await tester.pump(const Duration(milliseconds: 2600));
       await tester.pumpAndSettle();
       await _signIn(tester);
+
+      _expectAlugaPlayWordmark(tester);
+      expect(find.byKey(const ValueKey('home-brand-logo')), findsNothing);
+      expect(find.text('Olá, Jogador!'), findsNothing);
+      expect(find.text('Sua próxima aventura começa aqui.'), findsNothing);
+      final productCard = find.byType(ProductCard).first;
+      final card = tester.widget<Card>(
+        find.descendant(of: productCard, matching: find.byType(Card)),
+      );
+      expect(
+        card.color,
+        Theme.of(tester.element(productCard)).colorScheme.surface,
+      );
 
       await tester.enterText(
         find.byType(TextField).first,
@@ -281,6 +369,8 @@ void main() {
     await tester.pumpAndSettle();
     await _signIn(tester);
 
+    final colorScheme = Theme.of(tester.element(find.byType(HomeScreen)))
+        .colorScheme;
     await tester.tap(find.byKey(const ValueKey('quick-filter-button')));
     await tester.pumpAndSettle();
 
@@ -290,17 +380,24 @@ void main() {
       find.byKey(const ValueKey('quick-platform-Todas')),
     );
     expect(selectedPlatformChip.selected, isTrue);
-    expect(selectedPlatformChip.selectedColor, const Color(0xFF16A34A));
-    expect(selectedPlatformChip.labelStyle?.color, Colors.white);
+    expect(selectedPlatformChip.selectedColor, colorScheme.primary);
+    expect(
+      selectedPlatformChip.backgroundColor,
+      colorScheme.surfaceContainerHighest,
+    );
+    expect(selectedPlatformChip.labelStyle?.color, colorScheme.onPrimary);
     expect(selectedPlatformChip.labelStyle?.fontWeight, FontWeight.w600);
 
     final unselectedStyleChip = tester.widget<ChoiceChip>(
       find.byKey(const ValueKey('quick-style-Ação')),
     );
     expect(unselectedStyleChip.selected, isFalse);
-    expect(unselectedStyleChip.backgroundColor, const Color(0xFF14241B));
-    expect(unselectedStyleChip.side?.color, const Color(0xFF2C4A39));
-    expect(unselectedStyleChip.labelStyle?.color, const Color(0xFFECF5EF));
+    expect(
+      unselectedStyleChip.backgroundColor,
+      colorScheme.surfaceContainerHighest,
+    );
+    expect(unselectedStyleChip.side?.color, colorScheme.outlineVariant);
+    expect(unselectedStyleChip.labelStyle?.color, colorScheme.onSurface);
     expect(unselectedStyleChip.labelStyle?.fontWeight, FontWeight.w500);
 
     await tester.tap(
@@ -321,7 +418,7 @@ void main() {
           .widget<ChoiceChip>(find.byKey(const ValueKey('quick-style-Ação')))
           .labelStyle
           ?.color,
-      Colors.white,
+      colorScheme.onPrimary,
     );
     await tester.tap(find.text('Limpar'));
     await tester.pumpAndSettle();
@@ -408,6 +505,7 @@ void main() {
     final switchedBrightness = Theme.of(tester.element(find.byType(HomeScreen)))
         .brightness;
     expect(switchedBrightness, isNot(initialBrightness));
+    _expectAlugaPlayWordmark(tester);
     expect(
       AppTheme.themeModeNotifier.value,
       switchedBrightness == Brightness.dark ? ThemeMode.dark : ThemeMode.light,
@@ -419,21 +517,66 @@ void main() {
       Theme.of(tester.element(find.byType(HomeScreen))).brightness,
       initialBrightness,
     );
+    _expectAlugaPlayWordmark(tester);
   });
 
-  test('light theme uses soft surfaces and readable text colors', () {
-    final theme = AppTheme.lightTheme;
+  test('light theme uses crisp surfaces and readable blue-gold colors', () {
+    final lightTheme = AppTheme.lightTheme;
+    final darkTheme = AppTheme.darkTheme;
 
-    expect(theme.scaffoldBackgroundColor, const Color(0xFFE3ECE6));
-    expect(theme.colorScheme.surface, const Color(0xFFE3ECE6));
-    expect(theme.cardTheme.color, const Color(0xFFEEF4F0));
-    expect(theme.inputDecorationTheme.fillColor, const Color(0xFFEEF4F0));
-    expect(theme.colorScheme.outline, const Color(0xFFC8D8CE));
-    expect(theme.colorScheme.onSurface, const Color(0xFF233029));
-    expect(theme.colorScheme.onSurfaceVariant, const Color(0xFF52645A));
-    expect(theme.colorScheme.primary, const Color(0xFF2E8B57));
-    expect(theme.colorScheme.secondary, const Color(0xFF389E68));
-    expect(theme.colorScheme.primaryContainer, const Color(0xFFD7E7DD));
+    expect(lightTheme.scaffoldBackgroundColor, const Color(0xFFF8FAFC));
+    expect(lightTheme.colorScheme.surface, const Color(0xFFFFFFFF));
+    expect(lightTheme.cardTheme.color, const Color(0xFFFFFFFF));
+    expect(lightTheme.inputDecorationTheme.fillColor, const Color(0xFFEFF6FF));
+    expect(
+      lightTheme.colorScheme.surfaceContainerHighest,
+      const Color(0xFFEFF6FF),
+    );
+    expect(lightTheme.colorScheme.outline, const Color(0xFFCBD5E1));
+    expect(lightTheme.colorScheme.onSurface, const Color(0xFF0F172A));
+    expect(lightTheme.colorScheme.onSurfaceVariant, const Color(0xFF334155));
+    expect(lightTheme.colorScheme.primary, const Color(0xFF1D4ED8));
+    expect(lightTheme.colorScheme.secondary, const Color(0xFF1D4ED8));
+    expect(lightTheme.colorScheme.onSecondary, const Color(0xFF050811));
+    expect(lightTheme.colorScheme.secondaryContainer, const Color(0xFFDBEAFE));
+    expect(
+      lightTheme.colorScheme.onSecondaryContainer,
+      const Color(0xFF1E3A8A),
+    );
+    expect(lightTheme.colorScheme.tertiary, const Color(0xFF1D4ED8));
+    expect(lightTheme.colorScheme.primaryContainer, const Color(0xFFEFF6FF));
+    expect(AppTheme.heroBannerGradient(Brightness.light).colors, const [
+      Color(0xFFEFF6FF),
+      Color(0xFFF8FAFC),
+      Color(0xFFFFFFFF),
+    ]);
+
+    expect(darkTheme.colorScheme.primary, const Color(0xFF2563EB));
+    expect(darkTheme.colorScheme.secondary, const Color(0xFFFACC15));
+    expect(darkTheme.colorScheme.onSecondary, const Color(0xFF050811));
+    expect(darkTheme.colorScheme.secondaryContainer, const Color(0xFF332B10));
+
+    for (final theme in [lightTheme, darkTheme]) {
+      expect(theme.navigationBarTheme.indicatorColor, Colors.transparent);
+      for (final isSelected in [false, true]) {
+        final states = isSelected ? {WidgetState.selected} : <WidgetState>{};
+        final isDark = theme.brightness == Brightness.dark;
+        expect(
+          theme.navigationBarTheme.iconTheme?.resolve(states)?.color,
+          isDark || isSelected
+              ? theme.colorScheme.secondary
+              : theme.colorScheme.onSurfaceVariant,
+        );
+        expect(
+          theme.navigationBarTheme.labelTextStyle?.resolve(states)?.color,
+          isDark
+              ? theme.colorScheme.secondary
+              : isSelected
+              ? theme.colorScheme.primary
+              : theme.colorScheme.onSurfaceVariant,
+        );
+      }
+    }
   });
 
   testWidgets('system back follows tab history and pops product details', (
@@ -459,7 +602,7 @@ void main() {
 
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
-    expect(find.text('Olá, Jogador!'), findsOneWidget);
+    _expectAlugaPlayWordmark(tester);
     expect(find.byType(HomeScreen), findsOneWidget);
 
     const productName = "Marvel's Spider-Man 2";
@@ -644,6 +787,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 2600));
     await tester.pumpAndSettle();
 
+    _expectAlugaPlayWordmark(tester);
+
     await tester.enterText(
       find.byKey(const ValueKey('login-email')),
       'nao.cadastrado@example.com',
@@ -691,7 +836,34 @@ void main() {
     await tester.pump(const Duration(milliseconds: 2600));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Criar nova conta'));
-    await tester.tap(find.text('Criar nova conta'));
+    final registerFooter = find.byKey(const ValueKey('register-footer-line'));
+    expect(
+      tester.getCenter(registerFooter).dx,
+      closeTo(
+        tester.view.physicalSize.width / tester.view.devicePixelRatio / 2,
+        1,
+      ),
+    );
+    final registerLink = find.byKey(const ValueKey('register-account-link'));
+    final registerLinkWidget = tester.widget<InkWell>(registerLink);
+    expect(registerLinkWidget.onHighlightChanged, isNotNull);
+    expect(
+      registerLinkWidget.splashColor,
+      AppTheme.blueAccent.withValues(alpha: 0.28),
+    );
+    expect(
+      registerLinkWidget.highlightColor,
+      AppTheme.gold.withValues(alpha: 0.22),
+    );
+    expect(registerLinkWidget.mouseCursor, SystemMouseCursors.click);
+
+    final gesture = await tester.startGesture(tester.getCenter(registerLink));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(
+      tester.widget<Text>(find.text('Criar nova conta')).style?.color,
+      AppTheme.gold,
+    );
+    await gesture.up();
     await tester.pumpAndSettle();
     expect(find.byType(RegisterScreen), findsOneWidget);
     expect(find.byKey(const ValueKey('register-city')), findsNothing);
@@ -739,7 +911,7 @@ void main() {
     expect(initialText.style?.fontWeight, FontWeight.bold);
   });
 
-  // Os campos operacionais são testados no snapshot; o formulário atual não os coleta.
+  // Os campos avançados são testados no modelo/snapshot; o formulário atual não os coleta.
   test(
     'local storage restores account, preferences, and rental details',
     () async {

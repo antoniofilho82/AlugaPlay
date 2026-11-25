@@ -37,11 +37,11 @@ class ProductCard extends StatelessWidget {
                     gradient: LinearGradient(
                       colors: [
                         Color.alphaBlend(
-                          AppTheme.emeraldAccent.withValues(alpha: 0.12),
+                          AppTheme.blueAccent.withValues(alpha: 0.12),
                           colorScheme.surfaceContainerHighest,
                         ),
                         Color.alphaBlend(
-                          AppTheme.emeraldDeep.withValues(alpha: 0.07),
+                          AppTheme.blueDeep.withValues(alpha: 0.07),
                           colorScheme.surfaceContainerHighest,
                         ),
                       ],
@@ -71,6 +71,11 @@ class ProductCard extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: colorScheme.surface,
                             borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: colorScheme.secondary.withValues(
+                                alpha: 0.5,
+                              ),
+                            ),
                           ),
                           child: Text(
                             product.category,

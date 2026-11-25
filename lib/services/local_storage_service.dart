@@ -14,7 +14,7 @@ class LocalStorageService {
 
   static SharedPreferences? _preferences;
 
-  /// Deve terminar antes de qualquer leitura ou gravação local.
+  /// Obtém a instância única usada pelas leituras e gravações locais.
   static Future<void> init() async {
     _preferences = await SharedPreferences.getInstance();
   }
